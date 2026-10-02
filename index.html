@@ -1,0 +1,309 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Herd the flock into the pen with your sheepdogs. Free browser game.">
+<title>Sheepdog</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Nunito:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box}
+body{margin:0}
+[hidden]{display:none!important}
+
+/* Layout: one pasture board, level strip above, route tools and live numbers below. Single dusk-pasture look on purpose. */
+:root{
+  --bg:#1e251c; --panel:#2b3428; --panel2:#354031; --ink:#f0f1e6; --muted:#a8b29c; --line:#46523f;
+  --accent:#efbd4c; --good:#9bd47a; --bad:#ef7b6b;
+  --f-display:"Fredoka", "Avenir Next Rounded", system-ui, sans-serif;
+  --f-body:"Nunito", system-ui, sans-serif;
+  color-scheme:dark;
+}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15px}
+.wrap{max-width:1000px;margin:0 auto;padding:18px 16px 40px;display:grid;gap:12px}
+.top{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px 16px}
+.title{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;min-width:0}
+.back{color:var(--muted);text-decoration:none;font-family:var(--f-display);font-size:14px;width:100%}
+.back:hover{color:var(--accent)}
+h1{font-family:var(--f-display);font-weight:700;font-size:30px;margin:0;letter-spacing:-.01em}
+#lvname{font-family:var(--f-display);font-weight:500;font-size:18px;color:var(--muted)}
+.levels{display:flex;gap:6px;flex-wrap:wrap}
+.lv{width:44px;padding:5px 0 4px;display:grid;justify-items:center;gap:0;line-height:1.1}
+.lv b{font-size:16px}.lv small{font-size:10px;letter-spacing:1px;color:var(--accent)}
+.lv.cur{background:var(--accent);color:#2a2410}.lv.cur small{color:#2a2410}
+.stage{position:relative;border-radius:14px;overflow:hidden;border:2px solid var(--line);background:#86a663}
+canvas{display:block;width:100%;aspect-ratio:8/5;max-width:100%;touch-action:none;cursor:pointer}
+.bar{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center;justify-content:space-between}
+.group{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+button{font-family:var(--f-display);font-size:16px;font-weight:600;border:0;border-radius:10px;padding:9px 14px;background:var(--panel2);color:var(--ink);cursor:pointer;box-shadow:0 3px 0 #151a13;transition:transform .06s}
+button:hover{filter:brightness(1.12)}
+button:active{transform:translateY(2px);box-shadow:0 1px 0 #151a13}
+button:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+button.primary{background:var(--accent);color:#2a2410;min-width:96px}
+.dog{display:flex;align-items:center;gap:7px}
+.dog i{width:12px;height:12px;border-radius:50%;display:block;box-shadow:0 0 0 2px #151a13}
+.dog.sel{box-shadow:0 0 0 3px var(--c) inset,0 3px 0 #151a13}
+.stats{display:flex;gap:20px;font-family:var(--f-display);font-variant-numeric:tabular-nums}
+.stat{display:grid;line-height:1.1}
+.stat b{font-size:22px;font-weight:600}
+.stat span{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em}
+.overlay{position:absolute;inset:0;display:grid;place-items:center;background:rgba(18,23,16,.6);padding:16px}
+.res{background:var(--panel);border:2px solid var(--line);padding:20px 26px;border-radius:16px;text-align:center;display:grid;gap:12px;min-width:min(320px,100%)}
+.res h2{font-family:var(--f-display);font-size:28px;margin:0}
+.stars{display:flex;justify-content:center;gap:8px}
+.stars span{font-size:44px;line-height:1;color:var(--line)}
+.stars span.on{color:var(--accent);animation:pop .45s cubic-bezier(.3,1.6,.5,1) backwards}
+.goals{display:grid;gap:4px;text-align:left;font-variant-numeric:tabular-nums}
+.goals div{display:flex;gap:8px}.goals .ok{color:var(--good)}.goals .no{color:var(--muted)}
+.res .group{justify-content:center}
+@keyframes pop{0%{transform:scale(0) rotate(-40deg)}100%{transform:scale(1)}}
+@media (prefers-reduced-motion:reduce){.stars span.on{animation:none}}
+@media (max-width:560px){h1{font-size:24px}.stat b{font-size:18px}button{font-size:14px;padding:8px 11px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <div class="title"><a class="back" href="../">← All games</a><h1>Sheepdog</h1><span id="lvname"></span></div>
+    <div class="levels" id="levels"></div>
+  </div>
+  <div class="stage">
+    <canvas id="field" width="800" height="500" aria-label="Pasture. Hold and drag to run the dog."></canvas>
+    <div class="overlay" id="ov" hidden>
+      <div class="res">
+        <h2 id="ovTitle"></h2>
+        <div class="stars" id="ovStars"></div>
+        <div class="goals" id="ovGoals"></div>
+        <div class="group"><button id="ovRetry">Retry</button><button class="primary" id="ovNext">Next</button></div>
+      </div>
+    </div>
+  </div>
+  <div class="bar">
+    <div class="group" id="dogs"></div>
+    <div class="stats">
+      <div class="stat"><b id="sTime">0.0s</b><span>time</span></div>
+      <div class="stat"><b id="sSheep">0/1</b><span>penned</span></div>
+    </div>
+    <div class="group">
+      <button class="primary" id="bRestart">Restart</button>
+    </div>
+  </div>
+</div>
+
+<script id="sim">
+/* ---------- simulation (pure, no DOM) ---------- */
+const FW=800,FH=500,DOG_MAX=160,FR=115,LIMIT=90,DT=1/120;
+function rng(seed){return()=>{seed=seed+0x6D2B79F5|0;let t=Math.imul(seed^seed>>>15,1|seed);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+function cluster(cx,cy,n,sp,seed){const r=rng(seed),out=[];for(let i=0;i<n;i++){const a=r()*6.283,d=Math.sqrt(r())*sp;out.push([cx+Math.cos(a)*d,cy+Math.sin(a)*d]);}return out;}
+const LEVELS=[
+  {name:'First sheep',dogs:[[90,250]],sheep:[[330,262]],pen:{x:640,y:190,w:120,h:120,gate:'left'},par:{time:10,gold:6}},
+  {name:'A few more',dogs:[[90,410]],sheep:cluster(320,190,3,35,2),pen:{x:640,y:190,w:120,h:120,gate:'left'},par:{time:15,gold:9}},
+  {name:'The rock',dogs:[[80,250]],sheep:cluster(250,250,5,45,3),rocks:[[450,250,48]],pen:{x:640,y:190,w:120,h:120,gate:'left'},par:{time:20,gold:12}},
+  {name:'Up the hill',dogs:[[40,470]],sheep:cluster(170,370,8,45,4),pen:{x:335,y:16,w:130,h:110,gate:'bottom'},par:{time:18,gold:11}},
+  {name:'Second dog',dogs:[[50,120],[50,380]],sheep:[...cluster(240,110,5,38,6),...cluster(240,390,5,38,7)],pen:{x:650,y:185,w:120,h:130,gate:'left'},par:{time:28,gold:17}},
+  {name:'Fence line',dogs:[[50,150],[50,350]],sheep:cluster(220,250,10,60,8),fences:[[430,16,430,200],[430,300,430,484]],pen:{x:650,y:185,w:120,h:130,gate:'left'},par:{time:20,gold:12}},
+  {name:'Big flock',dogs:[[40,90],[40,250],[40,410]],sheep:cluster(290,250,20,95,12),rocks:[[520,140,36],[520,360,36]],pen:{x:650,y:180,w:130,h:140,gate:'left'},par:{time:25,gold:15}},
+  {name:'Scattered',dogs:[[30,120],[30,250],[30,380]],sheep:[...cluster(210,130,5,30,9),...cluster(160,250,5,30,10),...cluster(210,370,5,30,11)],pen:{x:650,y:180,w:130,h:140,gate:'left'},par:{time:32,gold:20}}
+];
+function penWalls(p,gw=110){const {x,y,w,h,gate}=p,S={top:[[x,y],[x+w,y]],bottom:[[x,y+h],[x+w,y+h]],left:[[x,y],[x,y+h]],right:[[x+w,y],[x+w,y+h]]},out=[];
+  for(const k in S){const [a,b]=S[k];if(k!==gate){out.push([a[0],a[1],b[0],b[1]]);continue;}
+    const L=Math.hypot(b[0]-a[0],b[1]-a[1]),ux=(b[0]-a[0])/L,uy=(b[1]-a[1])/L,gs=(L-gw)/2;
+    out.push([a[0],a[1],a[0]+ux*gs,a[1]+uy*gs]);out.push([a[0]+ux*(gs+gw),a[1]+uy*(gs+gw),b[0],b[1]]);}
+  return out;}
+function makeWorld(lvl){
+  const r=rng(99);
+  const dogs=lvl.dogs.map(([x,y])=>({x,y,vx:0,vy:0,h:0,tx:x,ty:y,go:false,moving:false}));
+  const sheep=lvl.sheep.map(([x,y])=>({x,y,vx:0,vy:0,fear:0,penned:false,h:r()*6.283,wa:r()*6.283}));
+  const P=lvl.pen,cx=P.x+P.w/2,cy=P.y+P.h/2,gate={left:{ix:P.x+30,iy:cy},top:{ix:cx,iy:P.y+30},bottom:{ix:cx,iy:P.y+P.h-30},right:{ix:P.x+P.w-30,iy:cy}}[P.gate];
+  return {gate,t:0,lvl,segs:[...penWalls(lvl.pen),...(lvl.fences||[])],rocks:lvl.rocks||[],dogs,sheep,rand:rng(7),events:[],penned:0};
+}
+function collide(w,s){
+  const R=8;s.x=Math.max(14,Math.min(FW-14,s.x));s.y=Math.max(14,Math.min(FH-14,s.y));
+  for(const [cx,cy,cr] of w.rocks){const dx=s.x-cx,dy=s.y-cy,d=Math.hypot(dx,dy)||1;if(d<cr+R){s.x=cx+dx/d*(cr+R);s.y=cy+dy/d*(cr+R);const vn=(s.vx*dx+s.vy*dy)/d;if(vn<0){s.vx-=vn*dx/d;s.vy-=vn*dy/d;}}}
+  for(const [x1,y1,x2,y2] of w.segs){const ex=x2-x1,ey=y2-y1,L2=ex*ex+ey*ey,u=Math.max(0,Math.min(1,((s.x-x1)*ex+(s.y-y1)*ey)/L2)),qx=x1+ex*u,qy=y1+ey*u,dx=s.x-qx,dy=s.y-qy,d=Math.hypot(dx,dy)||1e-3;
+    if(d<R+1){const nx=dx/d,ny=dy/d;s.x=qx+nx*(R+1);s.y=qy+ny*(R+1);const vn=s.vx*nx+s.vy*ny;if(vn<0){s.vx-=vn*nx;s.vy-=vn*ny;}}}
+}
+function step(w,dt){
+  w.t+=dt;
+  for(const d of w.dogs){
+    if(d.go){const dx=d.tx-d.x,dy=d.ty-d.y,dd=Math.hypot(dx,dy)||1,v=Math.min(DOG_MAX,dd*6),k=Math.min(1,dt*10);d.vx+=(dx/dd*v-d.vx)*k;d.vy+=(dy/dd*v-d.vy)*k;}
+    else{const k=Math.exp(-10*dt);d.vx*=k;d.vy*=k;}
+    d.x+=d.vx*dt;d.y+=d.vy*dt;collide(w,d);
+    const sp=Math.hypot(d.vx,d.vy);if(sp>5)d.h=Math.atan2(d.vy,d.vx);d.moving=sp>25;
+  }
+  const S=w.sheep,P=w.lvl.pen;
+  for(const s of S){
+    let ax=0,ay=0,direct=0;
+    if(!s.penned)for(const d of w.dogs){const ex=s.x-d.x,ey=s.y-d.y,dd=Math.hypot(ex,ey)||1;if(dd<FR){const k=1-dd/FR,hx=Math.cos(d.h),hy=Math.sin(d.h),ahead=d.moving&&(ex*hx+ey*hy)>0?1.4:0;ax+=(ex/dd+hx*ahead)*700*k;ay+=(ey/dd+hy*ahead)*700*k;direct=Math.max(direct,k);}}
+    let n=0,cx=0,cy=0,vx=0,vy=0,nf=0;
+    for(const o of S){if(o===s||o.penned!==s.penned)continue;const ex=s.x-o.x,ey=s.y-o.y,dd=Math.hypot(ex,ey)||1;
+      if(dd<18){ax+=ex/dd*500*(1-dd/18);ay+=ey/dd*500*(1-dd/18);}
+      if(dd<90){n++;cx+=o.x;cy+=o.y;vx+=o.vx;vy+=o.vy;nf=Math.max(nf,o.fear);}}
+    s.fear=Math.max(direct,nf*.7,s.fear-dt*.6);
+    if(n&&!s.penned){cx/=n;cy/=n;vx/=n;vy/=n;const c=.5+3*s.fear;ax+=(cx-s.x)*c;ay+=(cy-s.y)*c;ax+=(vx-s.vx)*1.2*s.fear;ay+=(vy-s.vy)*1.2*s.fear;}
+    if(!s.penned){const G=w.gate,dx=G.ix-s.x,dy=G.iy-s.y,dd=Math.hypot(dx,dy)||1;if(dd<140){const k=1-dd/140;ax+=dx/dd*160*k;ay+=dy/dd*160*k;}}
+    s.wa+=(w.rand()-.5)*dt*6;if(s.fear<.1){ax+=Math.cos(s.wa)*14;ay+=Math.sin(s.wa)*14;}
+    s.vx+=ax*dt;s.vy+=ay*dt;const damp=Math.exp(-2.2*dt);s.vx*=damp;s.vy*=damp;
+    const max=s.penned?14:16+104*s.fear,sp=Math.hypot(s.vx,s.vy);if(sp>max){s.vx*=max/sp;s.vy*=max/sp;}
+    s.x+=s.vx*dt;s.y+=s.vy*dt;
+    if(sp>4){let dh=Math.atan2(s.vy,s.vx)-s.h;dh=Math.atan2(Math.sin(dh),Math.cos(dh));s.h+=dh*Math.min(1,dt*6);}
+    collide(w,s);
+    if(!s.penned&&s.x>P.x+9&&s.x<P.x+P.w-9&&s.y>P.y+9&&s.y<P.y+P.h-9){s.penned=true;s.fear=0;w.penned++;w.events.push({x:s.x,y:s.y});}
+    if(s.penned){s.x=Math.max(P.x+10,Math.min(P.x+P.w-10,s.x));s.y=Math.max(P.y+10,Math.min(P.y+P.h-10,s.y));}
+  }
+}
+if(typeof module!=='undefined')module.exports={LEVELS,makeWorld,step,DT,LIMIT};
+</script>
+
+<script>
+/* ---------- game UI ---------- */
+const DOGC=['#efbd4c','#71bdf0','#f0806f'];
+const $=s=>document.querySelector(s);
+const cv=$('#field'),g=cv.getContext('2d'),DPR=Math.min(2,window.devicePixelRatio||1);
+cv.width=FW*DPR;cv.height=FH*DPR;
+const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
+let li=0,lvl,sel=0,mode='ready',world,acc=0,pops=[],deco=[],held=false,ptr=null;
+const keys=new Set();
+let stars={};try{stars=JSON.parse(localStorage.getItem('sheepdog-live-stars')||'{}')||{};}catch(e){stars={};}
+function saveStars(){try{localStorage.setItem('sheepdog-live-stars',JSON.stringify(stars));}catch(e){}}
+
+function buildLevels(){
+  const el=$('#levels');el.innerHTML='';
+  LEVELS.forEach((L,i)=>{const b=document.createElement('button');b.className='lv'+(i==li?' cur':'');const s=stars[i]||0;
+    b.innerHTML=`<b>${i+1}</b><small>${'★'.repeat(s)}${'·'.repeat(3-s)}</small>`;b.title=L.name;b.onclick=()=>load(i);el.appendChild(b);});
+}
+function buildDogs(){
+  const el=$('#dogs');el.innerHTML='';
+  lvl.dogs.forEach((_,i)=>{const b=document.createElement('button');b.className='dog'+(i==sel?' sel':'');b.style.setProperty('--c',DOGC[i]);
+    b.innerHTML=`<i style="background:${DOGC[i]}"></i>Dog ${i+1}`;b.onclick=()=>pick(i);el.appendChild(b);});
+}
+function pick(i){if(i===sel||i>=lvl.dogs.length)return;sel=i;buildDogs();}
+function load(i){
+  li=i;lvl=LEVELS[i];sel=0;
+  const r=(()=>{let s=i*977+13;return()=>{s=(s*16807)%2147483647;return s/2147483647;};})();
+  deco=Array.from({length:70},()=>[r()*FW,r()*FH,r()<.12?(r()<.5?'#f6f0d8':'#f2d36b'):null]);
+  reset();$('#lvname').textContent=lvl.name;buildLevels();buildDogs();
+}
+function reset(){world=makeWorld(lvl);mode='ready';acc=0;pops=[];held=false;$('#ov').hidden=true;}
+function start(){if(mode==='ready')mode='play';}
+function finish(win){
+  mode='done';held=false;
+  const t=world.t,p=lvl.par;
+  const goals=[[win,'Every sheep penned',`${world.penned}/${world.sheep.length}`],[win&&t<=p.time,`Under ${p.time} s`,`${t.toFixed(1)} s`],[win&&t<=p.gold,`Under ${p.gold} s`,'']];
+  const n=goals.filter(q=>q[0]).length;
+  if(n>(stars[li]||0)){stars[li]=n;saveStars();buildLevels();}
+  $('#ovTitle').textContent=win?'All penned!':'Out of time';
+  $('#ovStars').innerHTML=[0,1,2].map(k=>`<span class="${k<n?'on':''}" style="animation-delay:${.15+k*.18}s">★</span>`).join('');
+  $('#ovGoals').innerHTML=goals.map(([ok,l,v])=>`<div class="${ok?'ok':'no'}"><span>${ok?'✓':'✗'}</span><span>${l}</span><span style="margin-left:auto">${v}</span></div>`).join('');
+  $('#ovNext').hidden=!win||li>=LEVELS.length-1;$('#ov').hidden=false;
+}
+
+/* controls: hold and drag to run the selected dog, tap a dog to switch */
+function pt(e){const r=cv.getBoundingClientRect();return [Math.max(14,Math.min(FW-14,(e.clientX-r.left)/r.width*FW)),Math.max(14,Math.min(FH-14,(e.clientY-r.top)/r.height*FH))];}
+cv.addEventListener('pointerdown',e=>{
+  if(mode==='done')return;
+  const p=pt(e);let hit=-1,bd=30;
+  world.dogs.forEach((d,i)=>{const dd=Math.hypot(d.x-p[0],d.y-p[1]);if(dd<bd){bd=dd;hit=i;}});
+  if(hit>=0)pick(hit);
+  held=true;ptr=p;start();cv.setPointerCapture(e.pointerId);
+});
+cv.addEventListener('pointermove',e=>{if(held)ptr=pt(e);});
+const release=()=>{held=false;};
+cv.addEventListener('pointerup',release);cv.addEventListener('pointercancel',release);
+const MOVE={ArrowUp:[0,-1],ArrowDown:[0,1],ArrowLeft:[-1,0],ArrowRight:[1,0],w:[0,-1],s:[0,1],a:[-1,0],d:[1,0]};
+addEventListener('keydown',e=>{
+  const k=e.key.length===1?e.key.toLowerCase():e.key;
+  if(MOVE[k]){e.preventDefault();if(mode!=='done'){keys.add(k);start();}}
+  else if(k>='1'&&k<='3')pick(+k-1);
+  else if(k==='Tab'){e.preventDefault();pick((sel+1)%lvl.dogs.length);}
+  else if(k==='r')reset();
+});
+addEventListener('keyup',e=>{keys.delete(e.key.length===1?e.key.toLowerCase():e.key);});
+addEventListener('blur',()=>{keys.clear();held=false;});
+$('#bRestart').onclick=reset;
+$('#ovRetry').onclick=reset;$('#ovNext').onclick=()=>load(Math.min(LEVELS.length-1,li+1));
+
+function steer(){
+  world.dogs.forEach((d,i)=>{d.go=false;if(i!==sel||mode==='done')return;
+    if(held&&ptr){d.go=true;d.tx=ptr[0];d.ty=ptr[1];return;}
+    let x=0,y=0;for(const k of keys){x+=MOVE[k][0];y+=MOVE[k][1];}
+    if(x||y){const l=Math.hypot(x,y);d.go=true;d.tx=d.x+x/l*80;d.ty=d.y+y/l*80;}
+  });
+}
+
+/* rendering */
+function fence(x1,y1,x2,y2){
+  g.lineCap='round';g.strokeStyle='rgba(30,40,20,.25)';g.lineWidth=7;g.beginPath();g.moveTo(x1+2,y1+3);g.lineTo(x2+2,y2+3);g.stroke();
+  g.strokeStyle='#8a5a32';g.lineWidth=5;g.beginPath();g.moveTo(x1,y1);g.lineTo(x2,y2);g.stroke();
+  const L=Math.hypot(x2-x1,y2-y1),n=Math.max(1,Math.round(L/28));g.fillStyle='#5b3a1f';
+  for(let i=0;i<=n;i++){const x=x1+(x2-x1)*i/n,y=y1+(y2-y1)*i/n;g.fillRect(x-3.5,y-3.5,7,7);}
+}
+function drawSheep(s,t){
+  const bob=s.fear>.2&&!reduce?Math.sin(t*22+s.wa)*1.2:0;
+  g.save();g.translate(s.x,s.y+bob);g.rotate(s.h);
+  g.fillStyle='rgba(30,40,20,.22)';g.beginPath();g.ellipse(1,3,11,8,0,0,7);g.fill();
+  g.fillStyle='#f6f3ea';g.strokeStyle='#cfc7b2';g.lineWidth=1.2;
+  for(const [x,y,r] of [[-5,-3,5],[-5,3,5],[0,-4,5],[0,4,5],[4,0,5.5],[-1,0,6]]){g.beginPath();g.arc(x,y,r,0,7);g.fill();g.stroke();}
+  g.fillStyle='#3a322e';g.beginPath();g.ellipse(10,0,4.5,3.6,0,0,7);g.fill();
+  g.beginPath();g.ellipse(8.5,-4,1.6,2.6,.6,0,7);g.ellipse(8.5,4,1.6,2.6,-.6,0,7);g.fill();
+  g.restore();
+}
+function drawDog(d,c,t){
+  g.save();g.translate(d.x,d.y);g.rotate(d.h);
+  g.fillStyle='rgba(30,40,20,.25)';g.beginPath();g.ellipse(1,3,13,7,0,0,7);g.fill();
+  const wag=!reduce?Math.sin(t*(d.moving?25:6))*(d.moving?.5:.25):0;
+  g.strokeStyle='#1f1d1d';g.lineWidth=3;g.lineCap='round';g.beginPath();g.moveTo(-11,0);g.lineTo(-18,6*Math.sin(wag));g.stroke();
+  g.fillStyle='#1f1d1d';g.beginPath();g.ellipse(-1,0,12,6.5,0,0,7);g.fill();
+  g.fillStyle='#f4f2ec';g.beginPath();g.ellipse(5,0,4,5,0,0,7);g.fill();
+  g.strokeStyle=c;g.lineWidth=3;g.beginPath();g.moveTo(8,-5);g.lineTo(8,5);g.stroke();
+  g.fillStyle='#1f1d1d';g.beginPath();g.arc(12,0,5.2,0,7);g.fill();
+  g.fillStyle='#f4f2ec';g.beginPath();g.ellipse(15.5,0,2.6,2,0,0,7);g.fill();
+  g.fillStyle='#1f1d1d';g.beginPath();g.ellipse(10,-4.6,2.2,3,-.5,0,7);g.ellipse(10,4.6,2.2,3,.5,0,7);g.fill();
+  g.restore();
+}
+function label(txt,x,y,size=20){g.font=`600 ${size}px Fredoka, system-ui, sans-serif`;g.textAlign='center';g.textBaseline='middle';g.lineWidth=5;g.strokeStyle='rgba(30,40,20,.55)';g.strokeText(txt,x,y);g.fillStyle='#fff';g.fillText(txt,x,y);}
+function render(now){
+  const t=now/1000;
+  g.setTransform(DPR,0,0,DPR,0,0);
+  g.fillStyle='#86a663';g.fillRect(0,0,FW,FH);
+  g.fillStyle='#7f9e5d';for(let x=0;x<FW;x+=80)g.fillRect(x,0,40,FH);
+  for(const [x,y,f] of deco){if(f){g.fillStyle=f;g.beginPath();g.arc(x,y,2.2,0,7);g.fill();}else{g.strokeStyle='#6d8c4e';g.lineWidth=1.5;g.beginPath();g.moveTo(x-3,y-4);g.lineTo(x,y);g.lineTo(x+3,y-4);g.stroke();}}
+  const P=lvl.pen;g.fillStyle='#b6a26a';g.fillRect(P.x,P.y,P.w,P.h);g.fillStyle='rgba(120,95,50,.25)';for(let y=P.y+6;y<P.y+P.h;y+=12)g.fillRect(P.x+4,y,P.w-8,2);
+  for(const [cx,cy,r] of world.rocks){g.fillStyle='rgba(30,40,20,.25)';g.beginPath();g.ellipse(cx+4,cy+6,r,r*.85,0,0,7);g.fill();g.fillStyle='#8f938a';g.beginPath();g.arc(cx,cy,r,0,7);g.fill();g.fillStyle='#a6aaa0';g.beginPath();g.arc(cx-r*.25,cy-r*.3,r*.55,0,7);g.fill();}
+  for(const s of world.segs)fence(...s);
+  const D=world.dogs[sel];
+  g.globalAlpha=.10;g.fillStyle=DOGC[sel];g.beginPath();g.arc(D.x,D.y,FR,0,7);g.fill();g.globalAlpha=1;
+  if(held&&ptr&&mode!=='done'){g.strokeStyle=DOGC[sel];g.globalAlpha=.6;g.lineWidth=2;g.setLineDash([6,6]);g.beginPath();g.moveTo(D.x,D.y);g.lineTo(...ptr);g.stroke();g.setLineDash([]);g.globalAlpha=1;
+    g.lineWidth=3;g.beginPath();g.arc(ptr[0],ptr[1],9,0,7);g.stroke();}
+  for(const s of world.sheep)drawSheep(s,t);
+  world.dogs.forEach((d,i)=>{
+    if(i===sel){g.strokeStyle=DOGC[i];g.lineWidth=3;g.beginPath();g.arc(d.x,d.y,20,0,7);g.stroke();}
+    drawDog(d,DOGC[i],t);
+    if(world.dogs.length>1){g.fillStyle=DOGC[i];g.beginPath();g.arc(d.x,d.y-24,8,0,7);g.fill();g.font='700 11px Fredoka, system-ui, sans-serif';g.textAlign='center';g.textBaseline='middle';g.fillStyle='#2a2410';g.fillText(i+1,d.x,d.y-23.5);}
+  });
+  pops=pops.filter(p=>t-p.t0<1);
+  for(const p of pops){const u=t-p.t0,sc=u<.15?u/.15*1.4:1.4-.4*Math.min(1,(u-.15)/.2);g.save();g.translate(p.x,p.y-30*u);g.scale(sc,sc);g.globalAlpha=1-u;g.font='700 20px Fredoka, system-ui, sans-serif';g.textAlign='center';g.textBaseline='middle';g.lineWidth=4;g.strokeStyle='#2a2410';g.strokeText('+1',0,0);g.fillStyle='#efbd4c';g.fillText('+1',0,0);g.restore();}
+  if(mode==='ready')label(lvl.dogs.length>1?'Hold and drag to run. Tap a dog to switch.':'Hold and drag to run the dog',FW/2,34);
+}
+let last=performance.now(),shown={};
+function frame(now){
+  const dt=Math.min(.05,(now-last)/1000);last=now;
+  if(mode==='play'){
+    steer();acc+=dt;
+    while(acc>=DT&&mode==='play'){step(world,DT);acc-=DT;
+      for(const ev of world.events)pops.push({x:ev.x,y:ev.y,t0:now/1000});world.events.length=0;
+      if(world.penned===world.sheep.length)finish(true);else if(world.t>=LIMIT)finish(false);}
+  }
+  render(now);
+  const left=Math.max(0,LIMIT-world.t);
+  const vals={sTime:world.t.toFixed(1)+'s',sSheep:`${world.penned}/${world.sheep.length}`};
+  for(const k in vals)if(shown[k]!==vals[k]){shown[k]=vals[k];$('#'+k).textContent=vals[k];}
+  $('#sTime').style.color=left<10&&mode==='play'?'var(--bad)':'';
+  requestAnimationFrame(frame);
+}
+load(0);requestAnimationFrame(frame);
+</script>
+</body>
+</html>
