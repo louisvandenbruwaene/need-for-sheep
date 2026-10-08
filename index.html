@@ -94,7 +94,7 @@ button.primary{background:var(--accent);color:#2a2410;min-width:96px}
 
 <script id="sim">
 /* ---------- simulation (pure, no DOM) ---------- */
-const FW=800,FH=500,DOG_MAX=160,FR=115,LIMIT=90,DT=1/120,WRONG=3;
+const FW=800,FH=500,DOG_MAX=160,FR=115,LIMIT=90,DT=1/120,WRONG=3,DOG_OUT=6,DOG_R=12;
 function rng(seed){return()=>{seed=seed+0x6D2B79F5|0;let t=Math.imul(seed^seed>>>15,1|seed);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
 const lambs=a=>a.map(([x,y])=>[x,y,1]);
 function cluster(cx,cy,n,sp,seed){const r=rng(seed),out=[];for(let i=0;i<n;i++){const a=r()*6.283,d=Math.sqrt(r())*sp;out.push([cx+Math.cos(a)*d,cy+Math.sin(a)*d]);}return out;}
@@ -107,28 +107,28 @@ const LEVELS=[
   {name:'Fence line',dogs:[[50,150],[50,350]],sheep:cluster(220,250,10,60,8),fences:[[430,16,430,200],[430,300,430,484]],pen:{x:650,y:185,w:120,h:130,gate:'left'},par:{time:20,gold:12}},
   {name:'Big flock',dogs:[[40,90],[40,250],[40,410]],sheep:cluster(290,250,20,95,12),rocks:[[520,140,36],[520,360,36]],pen:{x:650,y:180,w:130,h:140,gate:'left'},par:{time:25,gold:15}},
   {name:'Scattered',dogs:[[30,120],[30,250],[30,380]],sheep:[...cluster(210,130,5,30,9),...cluster(160,250,5,30,10),...cluster(210,370,5,30,11)],pen:{x:650,y:180,w:130,h:140,gate:'left'},par:{time:32,gold:20}},
-  {name:'Corner pen',dogs:[[40,460]],sheep:cluster(200,330,8,50,21),rocks:[[420,250,40],[560,380,30]],pen:{x:640,y:16,w:140,h:120,gate:'bottom'},par:{time:33,gold:21}},
-  {name:'Needle gap',dogs:[[40,250]],sheep:cluster(200,250,8,55,22),fences:[[420,16,420,330],[420,410,420,484]],pen:{x:650,y:190,w:130,h:120,gate:'left'},par:{time:31,gold:20}},
-  {name:'Turn back',dogs:[[760,460]],sheep:cluster(560,330,8,45,23),pen:{x:20,y:190,w:130,h:120,gate:'right'},rocks:[[330,170,40],[330,360,40]],par:{time:33,gold:21}},
-  {name:'Boulder field',dogs:[[40,250]],sheep:cluster(170,250,10,55,24),rocks:[[330,120,30],[330,380,30],[420,250,34],[520,130,30],[520,370,30],[600,250,26]],pen:{x:660,y:190,w:120,h:120,gate:'left'},par:{time:43,gold:27}},
+  {name:'Corner pen',dogs:[[40,460]],sheep:cluster(200,330,8,50,21),rocks:[[420,250,40],[560,380,30]],pen:{x:640,y:16,w:140,h:120,gate:'bottom'},par:{time:35,gold:22}},
+  {name:'Needle gap',dogs:[[40,250]],sheep:cluster(200,250,8,55,22),fences:[[420,16,420,330],[420,410,420,484]],pen:{x:650,y:190,w:130,h:120,gate:'left'},par:{time:28,gold:18}},
+  {name:'Turn back',dogs:[[760,460]],sheep:cluster(560,330,8,45,23),pen:{x:20,y:190,w:130,h:120,gate:'right'},rocks:[[330,170,40],[330,360,40]],par:{time:21,gold:13}},
+  {name:'Boulder field',dogs:[[40,250]],sheep:cluster(170,250,10,55,24),rocks:[[330,120,30],[330,380,30],[420,250,34],[520,130,30],[520,370,30],[600,250,26]],pen:{x:660,y:190,w:120,h:120,gate:'left'},par:{time:42,gold:27}},
   {name:'Ewes and lambs',dogs:[[40,250]],sheep:[...cluster(220,120,4,30,51),...lambs(cluster(220,380,4,26,52))],pens:[{x:650,y:30,w:130,h:130,gate:'left',kind:0},{x:650,y:340,w:130,h:130,gate:'left',kind:1}],par:{time:35,gold:22}},
-  {name:'Split field',dogs:[[40,120],[40,380]],sheep:[...cluster(250,120,6,40,25),...cluster(250,380,6,40,26)],fences:[[16,250,520,250]],pen:{x:650,y:190,w:130,h:120,gate:'left'},par:{time:37,gold:24}},
-  {name:'Round the back',dogs:[[40,250]],sheep:cluster(200,250,8,50,27),fences:[[560,90,560,410]],pen:{x:620,y:190,w:130,h:120,gate:'right'},par:{time:35,gold:22}},
-  {name:'Mixed up',dogs:[[40,250]],sheep:[...cluster(240,250,5,45,53),...lambs(cluster(240,250,5,45,54))],pens:[{x:650,y:30,w:130,h:130,gate:'left',kind:0},{x:650,y:340,w:130,h:130,gate:'left',kind:1}],par:{time:37,gold:24}},
-  {name:'Middle pen',dogs:[[40,40],[760,460]],sheep:[...cluster(140,400,5,35,28),...cluster(660,110,5,35,29)],pen:{x:335,y:190,w:130,h:120,gate:'top'},par:{time:32,gold:21}},
-  {name:'Zigzag',dogs:[[40,400]],sheep:cluster(150,400,8,45,30),fences:[[290,140,290,484],[510,16,510,360]],pen:{x:650,y:190,w:130,h:120,gate:'left'},par:{time:44,gold:29}},
-  {name:'Stampede',dogs:[[40,250]],sheep:cluster(230,250,25,90,31),pen:{x:650,y:180,w:130,h:140,gate:'left'},par:{time:45,gold:29}},
-  {name:'Both ways',dogs:[[400,40],[400,460]],sheep:[...cluster(400,250,6,50,55),...lambs(cluster(400,250,6,50,56))],pens:[{x:20,y:185,w:130,h:130,gate:'right',kind:0},{x:650,y:185,w:130,h:130,gate:'left',kind:1}],par:{time:53,gold:34}},
-  {name:'Funnel',dogs:[[40,120],[40,380]],sheep:cluster(210,250,14,80,32),fences:[[380,16,560,200],[380,484,560,300]],rocks:[[260,250,30]],pen:{x:650,y:190,w:130,h:120,gate:'left'},par:{time:34,gold:22}},
-  {name:'Hill top',dogs:[[400,470],[60,250]],sheep:[...cluster(140,380,6,40,33),...cluster(660,380,6,40,34)],rocks:[[400,300,40]],pen:{x:335,y:16,w:130,h:110,gate:'bottom'},par:{time:35,gold:23}},
-  {name:'Lambs uphill',dogs:[[40,420],[760,460]],sheep:[...cluster(200,360,6,50,57),...lambs(cluster(200,360,6,50,58))],pens:[{x:650,y:250,w:130,h:130,gate:'left',kind:0},{x:340,y:16,w:130,h:110,gate:'bottom',kind:1}],rocks:[[470,300,34]],par:{time:59,gold:38}},
-  {name:'Three gaps',dogs:[[40,250]],sheep:cluster(160,250,8,45,35),fences:[[280,16,280,330],[430,170,430,484],[580,16,580,330]],pen:{x:650,y:190,w:130,h:120,gate:'left'},par:{time:46,gold:30}},
-  {name:'Four corners',dogs:[[400,40],[400,460],[60,250]],sheep:[...cluster(90,80,4,28,36),...cluster(710,80,4,28,37),...cluster(90,420,4,28,38),...cluster(710,420,4,28,39)],pen:{x:335,y:190,w:130,h:120,gate:'bottom'},par:{time:60,gold:39}},
-  {name:'Market day',dogs:[[40,90],[40,250],[40,410]],sheep:[...cluster(200,110,4,35,59),...lambs(cluster(200,110,3,35,60)),...cluster(200,390,3,35,61),...lambs(cluster(200,390,4,35,62)),...lambs(cluster(360,250,3,30,63)),...cluster(360,250,3,30,64)],pens:[{x:650,y:30,w:130,h:130,gate:'left',kind:0},{x:650,y:340,w:130,h:130,gate:'left',kind:1}],rocks:[[520,250,40]],par:{time:96,gold:62},limit:130},
-  {name:'Big round',dogs:[[40,90],[40,410]],sheep:cluster(200,250,20,80,40),fences:[[560,90,560,410]],rocks:[[400,140,30],[400,360,30]],pen:{x:620,y:190,w:130,h:120,gate:'right'},par:{time:64,gold:41}},
-  {name:'Flock of thirty',dogs:[[40,90],[40,250],[40,410]],sheep:[...cluster(200,110,10,50,41),...cluster(200,390,10,50,42),...cluster(420,250,10,50,43)],rocks:[[560,120,30],[560,380,30]],pen:{x:650,y:180,w:130,h:140,gate:'left'},par:{time:37,gold:24}},
-  {name:'Shepherd’s test',dogs:[[40,90],[40,250],[40,410]],sheep:[...cluster(220,250,10,70,65),...lambs(cluster(220,250,10,70,66))],pens:[{x:650,y:16,w:130,h:130,gate:'bottom',kind:0},{x:650,y:354,w:130,h:130,gate:'top',kind:1}],fences:[[460,16,460,170],[460,330,460,484]],par:{time:81,gold:52},limit:110},
-  {name:'Grand trial',dogs:[[40,90],[40,250],[40,410]],sheep:[...cluster(150,120,8,40,44),...cluster(150,380,8,40,45),...cluster(330,250,8,40,46)],fences:[[440,16,440,320],[580,180,580,484]],rocks:[[250,250,26]],pen:{x:650,y:16,w:130,h:130,gate:'bottom'},par:{time:63,gold:40}}
+  {name:'Split field',dogs:[[40,120],[40,380]],sheep:[...cluster(250,120,6,40,25),...cluster(250,380,6,40,26)],fences:[[16,250,520,250]],pen:{x:650,y:190,w:130,h:120,gate:'left'},par:{time:47,gold:30}},
+  {name:'Round the back',dogs:[[40,250]],sheep:cluster(200,250,8,50,27),fences:[[560,90,560,410]],pen:{x:620,y:190,w:130,h:120,gate:'right'},par:{time:29,gold:18}},
+  {name:'Mixed up',dogs:[[40,250]],sheep:[...cluster(240,250,5,45,53),...lambs(cluster(240,250,5,45,54))],pens:[{x:650,y:30,w:130,h:130,gate:'left',kind:0},{x:650,y:340,w:130,h:130,gate:'left',kind:1}],par:{time:45,gold:29}},
+  {name:'Middle pen',dogs:[[40,40],[760,460]],sheep:[...cluster(140,400,5,35,28),...cluster(660,110,5,35,29)],pen:{x:335,y:190,w:130,h:120,gate:'top'},par:{time:31,gold:20}},
+  {name:'Zigzag',dogs:[[40,400]],sheep:cluster(150,400,8,45,30),fences:[[290,140,290,484],[510,16,510,360]],pen:{x:650,y:190,w:130,h:120,gate:'left'},par:{time:43,gold:27}},
+  {name:'Stampede',dogs:[[40,250]],sheep:cluster(230,250,25,90,31),pen:{x:650,y:180,w:130,h:140,gate:'left'},par:{time:43,gold:28}},
+  {name:'Both ways',dogs:[[400,40],[400,460]],sheep:[...cluster(400,250,6,50,55),...lambs(cluster(400,250,6,50,56))],pens:[{x:20,y:185,w:130,h:130,gate:'right',kind:0},{x:650,y:185,w:130,h:130,gate:'left',kind:1}],par:{time:67,gold:43}},
+  {name:'Funnel',dogs:[[40,120],[40,380]],sheep:cluster(210,250,14,80,32),fences:[[380,16,560,200],[380,484,560,300]],rocks:[[260,250,30]],pen:{x:650,y:190,w:130,h:120,gate:'left'},par:{time:46,gold:30}},
+  {name:'Hill top',dogs:[[400,470],[60,250]],sheep:[...cluster(140,380,6,40,33),...cluster(660,380,6,40,34)],rocks:[[400,300,40]],pen:{x:335,y:16,w:130,h:110,gate:'bottom'},par:{time:30,gold:19}},
+  {name:'Lambs uphill',dogs:[[40,420],[760,460]],sheep:[...cluster(200,360,6,50,57),...lambs(cluster(200,360,6,50,58))],pens:[{x:650,y:250,w:130,h:130,gate:'left',kind:0},{x:340,y:16,w:130,h:110,gate:'bottom',kind:1}],rocks:[[470,300,34]],par:{time:55,gold:35}},
+  {name:'Three gaps',dogs:[[40,250]],sheep:cluster(160,250,8,45,35),fences:[[280,16,280,330],[430,170,430,484],[580,16,580,330]],pen:{x:650,y:190,w:130,h:120,gate:'left'},par:{time:48,gold:31}},
+  {name:'Four corners',dogs:[[400,40],[400,460],[60,250]],sheep:[...cluster(90,80,4,28,36),...cluster(710,80,4,28,37),...cluster(90,420,4,28,38),...cluster(710,420,4,28,39)],pen:{x:335,y:190,w:130,h:120,gate:'bottom'},par:{time:59,gold:38}},
+  {name:'Market day',dogs:[[40,90],[40,250],[40,410]],sheep:[...cluster(200,110,4,35,59),...lambs(cluster(200,110,3,35,60)),...cluster(200,390,3,35,61),...lambs(cluster(200,390,4,35,62)),...lambs(cluster(360,250,3,30,63)),...cluster(360,250,3,30,64)],pens:[{x:650,y:30,w:130,h:130,gate:'left',kind:0},{x:650,y:340,w:130,h:130,gate:'left',kind:1}],rocks:[[520,250,40]],par:{time:54,gold:35}},
+  {name:'Big round',dogs:[[40,90],[40,410]],sheep:cluster(200,250,20,80,40),fences:[[560,90,560,410]],rocks:[[400,140,30],[400,360,30]],pen:{x:620,y:190,w:130,h:120,gate:'right'},par:{time:65,gold:42}},
+  {name:'Flock of thirty',dogs:[[40,90],[40,250],[40,410]],sheep:[...cluster(200,110,10,50,41),...cluster(200,390,10,50,42),...cluster(420,250,10,50,43)],rocks:[[560,120,30],[560,380,30]],pen:{x:650,y:180,w:130,h:140,gate:'left'},par:{time:30,gold:19}},
+  {name:'Shepherd’s test',dogs:[[40,90],[40,250],[40,410]],sheep:[...cluster(220,250,10,70,65),...lambs(cluster(220,250,10,70,66))],pens:[{x:650,y:16,w:130,h:130,gate:'bottom',kind:0},{x:650,y:354,w:130,h:130,gate:'top',kind:1}],fences:[[460,16,460,170],[460,330,460,484]],par:{time:130,gold:84},limit:150},
+  {name:'Grand trial',dogs:[[40,90],[40,250],[40,410]],sheep:[...cluster(150,120,8,40,44),...cluster(150,380,8,40,45),...cluster(330,250,8,40,46)],fences:[[440,16,440,320],[580,180,580,484]],rocks:[[250,250,26]],pen:{x:650,y:16,w:130,h:130,gate:'bottom'},par:{time:55,gold:35}}
 ];
 function penWalls(p,gw=110){const {x,y,w,h,gate}=p,S={top:[[x,y],[x+w,y]],bottom:[[x,y+h],[x+w,y+h]],left:[[x,y],[x,y+h]],right:[[x+w,y],[x+w,y+h]]},out=[];
   for(const k in S){const [a,b]=S[k];if(k!==gate){out.push([a[0],a[1],b[0],b[1]]);continue;}
@@ -145,8 +145,8 @@ function makeWorld(lvl){
     return {...P,ix,iy,ox,oy};});
   return {pens,t:0,lvl,segs:[...pens.flatMap(P=>penWalls(P)),...(lvl.fences||[])],rocks:lvl.rocks||[],dogs,sheep,rand:rng(7),events:[],penned:0};
 }
-function collide(w,s){
-  const R=s.kind?6:8;s.x=Math.max(14,Math.min(FW-14,s.x));s.y=Math.max(14,Math.min(FH-14,s.y));
+function collide(w,s,m=14){ // m: how close to the field edge; dogs may run right up to it (DOG_OUT), sheep keep 14 off
+  const R=s.kind?6:8;s.x=Math.max(m,Math.min(FW-m,s.x));s.y=Math.max(m,Math.min(FH-m,s.y));
   for(const [cx,cy,cr] of w.rocks){const dx=s.x-cx,dy=s.y-cy,d=Math.hypot(dx,dy)||1;if(d<cr+R){s.x=cx+dx/d*(cr+R);s.y=cy+dy/d*(cr+R);const vn=(s.vx*dx+s.vy*dy)/d;if(vn<0){s.vx-=vn*dx/d;s.vy-=vn*dy/d;}}}
   for(const [x1,y1,x2,y2] of w.segs){const ex=x2-x1,ey=y2-y1,L2=ex*ex+ey*ey,u=Math.max(0,Math.min(1,((s.x-x1)*ex+(s.y-y1)*ey)/L2)),qx=x1+ex*u,qy=y1+ey*u,dx=s.x-qx,dy=s.y-qy,d=Math.hypot(dx,dy)||1e-3;
     if(d<R+1){const nx=dx/d,ny=dy/d;s.x=qx+nx*(R+1);s.y=qy+ny*(R+1);const vn=s.vx*nx+s.vy*ny;if(vn<0){s.vx-=vn*nx;s.vy-=vn*ny;}}}
@@ -156,26 +156,45 @@ function step(w,dt){
   for(const d of w.dogs){
     if(d.go){const dx=d.tx-d.x,dy=d.ty-d.y,dd=Math.hypot(dx,dy)||1,v=Math.min(DOG_MAX,dd*6),k=Math.min(1,dt*10);d.vx+=(dx/dd*v-d.vx)*k;d.vy+=(dy/dd*v-d.vy)*k;}
     else{const k=Math.exp(-10*dt);d.vx*=k;d.vy*=k;}
-    d.x+=d.vx*dt;d.y+=d.vy*dt;collide(w,d);
+    d.x+=d.vx*dt;d.y+=d.vy*dt;collide(w,d,DOG_OUT);
     const sp=Math.hypot(d.vx,d.vy);if(sp>5)d.h=Math.atan2(d.vy,d.vx);d.moving=sp>25;
   }
   const S=w.sheep;
   for(const s of S){
     let ax=0,ay=0,direct=0;
-    if(!s.penned)for(const d of w.dogs){const ex=s.x-d.x,ey=s.y-d.y,dd=Math.hypot(ex,ey)||1;if(dd<FR){const k=1-dd/FR,hx=Math.cos(d.h),hy=Math.sin(d.h),ahead=d.moving&&(ex*hx+ey*hy)>0?1.4:0;ax+=(ex/dd+hx*ahead)*700*k;ay+=(ey/dd+hy*ahead)*700*k;direct=Math.max(direct,k);}}
+    const lamb=s.kind===1,fr=lamb?FR*1.2:FR;
+    if(!s.penned)for(const d of w.dogs){const ex=s.x-d.x,ey=s.y-d.y,dd=Math.hypot(ex,ey)||1;if(dd<fr){const k=1-dd/fr,hx=Math.cos(d.h),hy=Math.sin(d.h),ahead=d.moving&&(ex*hx+ey*hy)>0?1.4:0;ax+=(ex/dd+hx*ahead)*700*k;ay+=(ey/dd+hy*ahead)*700*k;direct=Math.max(direct,k);
+      if(dd<45){const q=1-dd/45;ax+=ex/dd*2600*q*q;ay+=ey/dd*2600*q*q;}}}
     let n=0,cx=0,cy=0,vx=0,vy=0,nf=0;
     for(const o of S){if(o===s||o.penned!==s.penned)continue;const ex=s.x-o.x,ey=s.y-o.y,dd=Math.hypot(ex,ey)||1;
       const sep=s.kind&&o.kind?13:18;if(dd<sep){ax+=ex/dd*500*(1-dd/sep);ay+=ey/dd*500*(1-dd/sep);}
-      if(dd<90){n++;cx+=o.x;cy+=o.y;vx+=o.vx;vy+=o.vy;nf=Math.max(nf,o.fear);}}
-    s.fear=Math.max(direct,nf*.7,s.fear-dt*.6);
-    if(n&&!s.penned){cx/=n;cy/=n;vx/=n;vy/=n;const c=.5+3*s.fear;ax+=(cx-s.x)*c;ay+=(cy-s.y)*c;ax+=(vx-s.vx)*1.2*s.fear;ay+=(vy-s.vy)*1.2*s.fear;}
+      if(dd<(lamb?60:90)){n++;cx+=o.x;cy+=o.y;vx+=o.vx;vy+=o.vy;nf=Math.max(nf,o.fear);}}
+    s.fear=Math.max(direct,nf*(lamb?.45:.7),s.fear-dt*(lamb?.9:.6));
+    if(n&&!s.penned){cx/=n;cy/=n;vx/=n;vy/=n;const c=(.5+3*s.fear)*(lamb?.35:1),al=(lamb?.5:1.2)*s.fear;ax+=(cx-s.x)*c;ay+=(cy-s.y)*c;ax+=(vx-s.vx)*al;ay+=(vy-s.vy)*al;}
     if(!s.penned)for(const G of w.pens){if(G.kind!=null&&G.kind!==s.kind)continue;const dx=G.ix-s.x,dy=G.iy-s.y,dd=Math.hypot(dx,dy)||1;if(dd<140){const k=1-dd/140;ax+=dx/dd*160*k;ay+=dy/dd*160*k;}}
-    s.wa+=(w.rand()-.5)*dt*6;if(s.fear<.1){ax+=Math.cos(s.wa)*14;ay+=Math.sin(s.wa)*14;}
+    s.wa+=(w.rand()-.5)*dt*(lamb?11:6);if(s.fear<(lamb?.25:.1)){const f=lamb?32:14;ax+=Math.cos(s.wa)*f;ay+=Math.sin(s.wa)*f;}
+    s.hop=Math.max(0,(s.hop||0)-dt);
+    if(lamb&&!s.penned&&s.fear<.2&&s.hop===0&&w.rand()<dt*.3){s.hop=.4;s.vx+=Math.cos(s.wa)*75;s.vy+=Math.sin(s.wa)*75;} // a little skip
+    if(!s.penned){ // walls: keep a little off them, and turn a push into a wall into a slide along it, so nothing jams in a corner
+      let nx=0,ny=0;const M=38,add=(dx,dy,d,m)=>{if(d<m){const k=1-Math.max(0,d)/m;nx+=dx*k;ny+=dy*k;}};
+      add(1,0,s.x,M);add(-1,0,FW-s.x,M);add(0,1,s.y,M);add(0,-1,FH-s.y,M);
+      for(const [x1,y1,x2,y2] of w.segs){const ex=x2-x1,ey=y2-y1,u=Math.max(0,Math.min(1,((s.x-x1)*ex+(s.y-y1)*ey)/(ex*ex+ey*ey))),dx=s.x-x1-ex*u,dy=s.y-y1-ey*u,d=Math.hypot(dx,dy)||1;add(dx/d,dy/d,d-8,26);}
+      for(const [rx,ry,rr] of w.rocks){const dx=s.x-rx,dy=s.y-ry,d=Math.hypot(dx,dy)||1;add(dx/d,dy/d,d-rr-8,26);}
+      const nl=Math.hypot(nx,ny);
+      if(nl>.05){const ux=nx/nl,uy=ny/nl,tx=-uy,ty=ux,an=ax*ux+ay*uy;
+        ax+=ux*Math.min(nl,1.5)*70;ay+=uy*Math.min(nl,1.5)*70;
+        if(an<0){const at=ax*tx+ay*ty;if(Math.abs(at)>-an*.3)s.slide=Math.sign(at);else if(!s.slide)s.slide=w.rand()<.5?-1:1;
+          const push=-an*Math.min(1,nl);ax+=ux*push+tx*s.slide*push*.9;ay+=uy*push+ty*s.slide*push*.9;}}
+      else s.slide=0;}
     s.vx+=ax*dt;s.vy+=ay*dt;const damp=Math.exp(-2.2*dt);s.vx*=damp;s.vy*=damp;
-    const max=s.penned?14:(s.kind?18:16)+(s.kind?116:104)*s.fear,sp=Math.hypot(s.vx,s.vy);if(sp>max){s.vx*=max/sp;s.vy*=max/sp;}
+    const max=s.penned?14:lamb?22+132*s.fear:16+104*s.fear,sp=Math.hypot(s.vx,s.vy);if(sp>max){s.vx*=max/sp;s.vy*=max/sp;}
     s.x+=s.vx*dt;s.y+=s.vy*dt;
     if(sp>4){let dh=Math.atan2(s.vy,s.vx)-s.h;dh=Math.atan2(Math.sin(dh),Math.cos(dh));s.h+=dh*Math.min(1,dt*6);}
     collide(w,s);
+    if(!s.penned){const R=(s.kind?6:8)+DOG_R;for(const d of w.dogs){const ex=s.x-d.x,ey=s.y-d.y,dd=Math.hypot(ex,ey);
+      if(dd<R){const ux=dd>1e-3?ex/dd:Math.cos(s.h),uy=dd>1e-3?ey/dd:Math.sin(s.h);s.x=d.x+ux*R;s.y=d.y+uy*R;const vn=s.vx*ux+s.vy*uy;if(vn<0){s.vx-=vn*ux;s.vy-=vn*uy;}collide(w,s);
+        if(Math.hypot(s.x-d.x,s.y-d.y)<R-.5){ // pinned between dog and wall: squeeze round the dog's side, toward open field
+          let tx=-uy,ty=ux;if(tx*(FW/2-s.x)+ty*(FH/2-s.y)<0){tx=-tx;ty=-ty;}s.x+=tx*140*dt;s.y+=ty*140*dt;s.vx=tx*110;s.vy=ty*110;s.fear=1;collide(w,s);}}}}
     if(!s.penned)for(const P of w.pens)if(s.x>P.x+9&&s.x<P.x+P.w-9&&s.y>P.y+9&&s.y<P.y+P.h-9){
       if(P.kind==null||P.kind===s.kind){s.penned=P;s.fear=0;w.penned++;w.events.push({x:s.x,y:s.y});}
       else{ // wrong pen: the farmer lets it straight back out, and that costs time
@@ -232,7 +251,7 @@ function finish(win){
 }
 
 /* controls: hold and drag to run the selected dog, tap a dog to switch */
-function pt(e){const r=cv.getBoundingClientRect();return [Math.max(14,Math.min(FW-14,(e.clientX-r.left)/r.width*FW)),Math.max(14,Math.min(FH-14,(e.clientY-r.top)/r.height*FH))];}
+function pt(e){const r=cv.getBoundingClientRect();return [Math.max(DOG_OUT,Math.min(FW-DOG_OUT,(e.clientX-r.left)/r.width*FW)),Math.max(DOG_OUT,Math.min(FH-DOG_OUT,(e.clientY-r.top)/r.height*FH))];}
 cv.addEventListener('pointerdown',e=>{
   if(mode==='done')return;
   const p=pt(e);let hit=-1,bd=30;
@@ -272,7 +291,7 @@ function fence(x1,y1,x2,y2){
   for(let i=0;i<=n;i++){const x=x1+(x2-x1)*i/n,y=y1+(y2-y1)*i/n;g.fillRect(x-3.5,y-3.5,7,7);}
 }
 function drawSheep(s,t){
-  const bob=s.fear>.2&&!reduce?Math.sin(t*22+s.wa)*1.2:0;
+  const bob=reduce?0:s.hop>0?-Math.sin(s.hop/.4*Math.PI)*5:s.fear>.2?Math.sin(t*22+s.wa)*1.2:0;
   g.save();g.translate(s.x,s.y+bob);g.rotate(s.h);if(s.kind)g.scale(.62,.62);
   g.fillStyle='rgba(30,40,20,.22)';g.beginPath();g.ellipse(1,3,11,8,0,0,7);g.fill();
   g.fillStyle=s.kind?'#fffdf6':'#f6f3ea';g.strokeStyle='#cfc7b2';g.lineWidth=1.2;
