@@ -116,6 +116,7 @@ const EWE=0,LAMB=1;
 const SHEEP_EDGE=14;          // sheep keep this far off the field edge
 const LAMB_BOOST=1.15;        // lambs are skittish: they notice dogs from further away and run faster
 const GATE_WIDTH=110;
+const HIDE_SEEK=200,HIDE_SPEED=100; // after a bark, lambs look for ewes this close and trot (not sprint) behind them
 
 /* ---------- small helpers ---------- */
 const clamp=(v,lo,hi)=>Math.max(lo,Math.min(hi,v));
@@ -396,29 +397,24 @@ function flockVelocity(s,flock,dogs){
   return [hx+flock.vx*align,hy+flock.vy*align];
 }
 
-// After a bark a lamb heads for a spot just beyond the ewes on the far side from the barking dog.
+// After a bark a lamb trots to a spot just beyond the nearby ewes, on the far side from the barking dog.
 // If it starts on the dog's side it first goes round the flank of the ewes instead of through the dog.
 function hideSpot(world,s){
   const dog=s.hideFrom;
   let ex=0,ey=0,n=0;
-  for(const o of world.sheep)if(!o.penned&&o.kind!==LAMB&&Math.hypot(o.x-s.x,o.y-s.y)<260){ex+=o.x;ey+=o.y;n++;}
-  let x,y;
-  if(n){
-    ex/=n;ey/=n;
-    let ux=ex-dog.x,uy=ey-dog.y;const len=Math.hypot(ux,uy)||1;ux/=len;uy/=len; // from the dog through the ewes
-    let flockRadius=0;
-    for(const o of world.sheep)if(!o.penned&&o.kind!==LAMB&&Math.hypot(o.x-ex,o.y-ey)<120)
-      flockRadius=Math.max(flockRadius,Math.hypot(o.x-ex,o.y-ey));
-    x=ex+ux*(flockRadius+30);y=ey+uy*(flockRadius+30);
-    const along=(s.x-ex)*ux+(s.y-ey)*uy,side=(s.x-ex)*-uy+(s.y-ey)*ux;
-    if(along<flockRadius*.5){ // still on the dog's side: go round the flock's flank
-      const sign=side<0?-1:1,ahead=Math.max(0,along+20);
-      x=ex-uy*sign*(flockRadius+28)+ux*ahead;
-      y=ey+ux*sign*(flockRadius+28)+uy*ahead;
-    }
-  }else{ // no ewes nearby: just run off a little
-    const ux=s.x-dog.x,uy=s.y-dog.y,len=Math.hypot(ux,uy)||1;
-    x=s.x+ux/len*60;y=s.y+uy/len*60;
+  for(const o of world.sheep)if(!o.penned&&o.kind!==LAMB&&Math.hypot(o.x-s.x,o.y-s.y)<HIDE_SEEK){ex+=o.x;ey+=o.y;n++;}
+  if(!n)return null; // no ewes nearby to hide behind
+  ex/=n;ey/=n;
+  let ux=ex-dog.x,uy=ey-dog.y;const len=Math.hypot(ux,uy)||1;ux/=len;uy/=len; // from the dog through the ewes
+  let flockRadius=0;
+  for(const o of world.sheep)if(!o.penned&&o.kind!==LAMB&&Math.hypot(o.x-ex,o.y-ey)<120)
+    flockRadius=Math.max(flockRadius,Math.hypot(o.x-ex,o.y-ey));
+  let x=ex+ux*(flockRadius+30),y=ey+uy*(flockRadius+30);
+  const along=(s.x-ex)*ux+(s.y-ey)*uy,side=(s.x-ex)*-uy+(s.y-ey)*ux;
+  if(along<flockRadius*.5){ // still on the dog's side: go round the flock's flank
+    const sign=side<0?-1:1,ahead=Math.max(0,along+20);
+    x=ex-uy*sign*(flockRadius+28)+ux*ahead;
+    y=ey+ux*sign*(flockRadius+28)+uy*ahead;
   }
   return [clamp(x,24,FIELD_W-24),clamp(y,24,FIELD_H-24)];
 }
@@ -504,10 +500,11 @@ function moveSheep(world,s,dt){
     wantX+=px;wantY+=py;
   }
   if(flock.count&&free){const [fx,fy]=flockVelocity(s,flock,dogs);wantX+=fx;wantY+=fy;} // 2
-  if(s.hideTime&&free){ // a bark overrides everything: run to the hiding spot behind the ewes
-    const [hx,hy]=hideSpot(world,s),gx=hx-s.x,gy=hy-s.y,gap=Math.hypot(gx,gy)||1,speed=Math.min(165*boost,gap*5);
+  const spot=s.hideTime&&free?hideSpot(world,s):null;
+  if(spot){ // a bark overrides everything: trot to the hiding spot behind the ewes
+    const gx=spot[0]-s.x,gy=spot[1]-s.y,gap=Math.hypot(gx,gy)||1,speed=Math.min(HIDE_SPEED*boost,gap*4);
     wantX=gx/gap*speed;wantY=gy/gap*speed;
-  }
+  }else s.hideTime=0;
   if(free){ // calm sheep ease into a new velocity, scared ones react at once
     const fleeSpeed=Math.hypot(dogs.fleeX,dogs.fleeY);
     const k=s.huddleTime?7:s.hideTime?9:2+6*Math.min(1,fleeSpeed/100);
