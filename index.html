@@ -97,7 +97,7 @@ button.primary{background:var(--accent);color:#2a2410;min-width:96px}
 /* ---------- simulation (pure, no DOM) ---------- */
 const FW=800,FH=500,DOG_MAX=160,DOG_WALK=95,LIMIT=90,DT=1/120,WRONG=3,DOG_OUT=6,DOG_R=12;
 // Calm vs panic: a dog's range is RMIN while it walks and grows to 2*RMIN while it sprints.
-// Inside the range sheep move away gently near the edge and bolt when the dog is close (top speed climbs past a sprinting dog right at its nose); sprinting also breaks up the flock.
+// Inside the range sheep move away gently near the edge and bolt when the dog is close; a running dog scares them from further and also loosens the flock.
 const RMIN=70,BARK_R=170,BARK_CD=4;
 function rng(seed){return()=>{seed=seed+0x6D2B79F5|0;let t=Math.imul(seed^seed>>>15,1|seed);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
 const lambs=a=>a.map(([x,y])=>[x,y,1]);
@@ -191,29 +191,36 @@ function step(w,dt){
   }
   const S=w.sheep;
   for(const s of S){
-    let ax=0,ay=0,direct=0,panic=0,close=0;
-    const lamb=s.kind===1,hid=inBush(w,s);
+    // Sheep steer toward a desired velocity built in priority order:
+    // 1. get away from the dogs, 2. stay with the flock (never by moving toward a dog), 3. an always-on slow drift away from the dogs.
+    let ax=0,ay=0,fx=0,fy=0,qx=0,qy=0,direct=0,panic=0;
+    const lamb=s.kind===1,hid=inBush(w,s),lk=lamb?1.15:1;
     s.hold=Math.max(0,(s.hold||0)-dt);s.hide=Math.max(0,(s.hide||0)-dt);
-    if(!s.penned)for(const d of w.dogs){const ex=s.x-d.x,ey=s.y-d.y,dd=Math.hypot(ex,ey)||1,R=d.range*(lamb?1.15:1),core=RMIN*(lamb?1.15:1);
+    if(!s.penned)for(const d of w.dogs){const ex=s.x-d.x,ey=s.y-d.y,dd=Math.hypot(ex,ey)||1,R=d.range*lk;
+      qx+=ex/(dd*dd);qy+=ey/(dd*dd); // which way is "away from the dogs", nearer dogs count more
       if(dd<45){const q=1-dd/45;ax+=ex/dd*2600*q*q;ay+=ey/dd*2600*q*q;}
       if(dd>=R)continue;
-      const q=1-dd/R,near=Math.max(0,1-dd/core); // q: how deep inside the range, near: how close to the dog itself
-      close=Math.max(close,near);
-      let push=(430*q+2400*near*near)*(1+.5*d.sprint);
-      if(s.hold)push*=.2;if(hid&&dd>50)push*=.3;if(s.hide)push*=.3;
-      const hx=Math.cos(d.h),hy=Math.sin(d.h),ahead=d.moving&&(ex*hx+ey*hy)>0?.8:0;
-      ax+=(ex/dd+hx*ahead)*push;ay+=(ey/dd+hy*ahead)*push;
-      direct=Math.max(direct,Math.min(1,.35*q+.75*near+.45*d.sprint*q));panic=Math.max(panic,d.sprint*(.4+.6*q));}
+      const c=1-dd/R; // 0 at the edge of the range, 1 at the dog
+      // edge+walking ~20, close+walking ~90, edge+running ~90, close+running ~190
+      let v=(15+85*c*Math.sqrt(c)+d.sprint*(65+40*c))*lk;
+      if(s.hold)v*=.2;if(hid&&dd>50)v*=.3;if(s.hide)v*=.3;
+      fx+=ex/dd*v;fy+=ey/dd*v;
+      direct=Math.max(direct,Math.min(1,v/(160*lk)));panic=Math.max(panic,d.sprint*(.4+.6*c));}
     s.panic=(s.panic||0)+(panic-(s.panic||0))*Math.min(1,dt*(panic>(s.panic||0)?4:1.5));
+    const ql=Math.hypot(qx,qy),Ax=ql?qx/ql:0,Ay=ql?qy/ql:0,F=Math.hypot(fx,fy);
     let n=0,cx=0,cy=0,vx=0,vy=0,nf=0;
     for(const o of S){if(o===s||o.penned!==s.penned)continue;const ex=s.x-o.x,ey=s.y-o.y,dd=Math.hypot(ex,ey)||1;
       const sep=s.kind&&o.kind?13:18;if(dd<sep){ax+=ex/dd*500*(1-dd/sep);ay+=ey/dd*500*(1-dd/sep);}
       const mate=s.hold||s.hide?o.kind===s.kind:true; // after a bark ewes bunch with ewes and lambs stick with lambs
       if(mate&&dd<(lamb?60:90)){n++;cx+=o.x;cy+=o.y;vx+=o.vx;vy+=o.vy;nf=Math.max(nf,o.fear);}}
     s.fear=Math.max(direct,nf*(lamb?.45:.7)*(1-.4*s.panic),s.fear-dt*(lamb?.9:.6)*(hid?3:1));
-    const loose=1-.75*s.panic; // a sprinting dog breaks the flock up
-    if(n&&!s.penned){cx/=n;cy/=n;vx/=n;vy/=n;const c=(s.hold?3.5:(.5+3*s.fear)*(lamb?.35:1)*loose),al=(lamb?.5:1.2)*s.fear*loose;ax+=(cx-s.x)*c;ay+=(cy-s.y)*c;ax+=(vx-s.vx)*al;ay+=(vy-s.vy)*al;}
-    if(s.panic>.05&&!s.penned){s.pa=(s.pa??s.wa)+(w.rand()-.5)*dt*14;ax+=Math.cos(s.pa)*150*s.panic;ay+=Math.sin(s.pa)*150*s.panic;}
+    let dvx=fx+Ax*3,dvy=fy+Ay*3; // 1 and 3: flee, plus the slow drift that never stops
+    if(n&&!s.penned){cx/=n;cy/=n;vx/=n;vy/=n;
+      const loose=1-.6*s.panic,gx=cx-s.x,gy=cy-s.y,gl=Math.hypot(gx,gy)||1; // a running dog loosens the flock
+      const gv=Math.min(gl*2.2,s.hold?60:(22+80*s.fear)*(lamb?.6:1))*loose;
+      let hx=gx/gl*gv,hy=gy/gl*gv;const back=hx*Ax+hy*Ay;if(back<0){hx-=back*Ax;hy-=back*Ay;} // 2: regroup only sideways or away, never toward a dog
+      const al=.5*s.fear*loose;dvx+=hx+vx*al;dvy+=hy+vy*al;}
+    if(!s.penned){const k=s.hold?7:2+6*Math.min(1,F/100);ax+=(dvx-s.vx)*k;ay+=(dvy-s.vy)*k;} // calm sheep ease in, scared ones react at once
     if(s.hide&&!s.penned){const dx=s.hx-s.x,dy=s.hy-s.y,dd=Math.hypot(dx,dy)||1;if(dd>8){ax+=dx/dd*700;ay+=dy/dd*700;}} // bark: lamb runs behind the ewes
     if(!s.penned&&!hid&&s.fear>.3)for(const [bx,by,br] of w.bush){const dx=bx-s.x,dy=by-s.y,dd=Math.hypot(dx,dy)||1;if(dd<br+60){ax+=dx/dd*140*s.fear;ay+=dy/dd*140*s.fear;}} // scared sheep dive into bushes
     if(!s.penned)for(const G of w.pens){if(G.kind!=null&&G.kind!==s.kind)continue;const dx=G.ix-s.x,dy=G.iy-s.y,dd=Math.hypot(dx,dy)||1;if(dd<140){const k=1-dd/140;ax+=dx/dd*160*k;ay+=dy/dd*160*k;}}
@@ -231,9 +238,9 @@ function step(w,dt){
         if(an<0){const at=ax*tx+ay*ty;if(Math.abs(at)>-an*.3)s.slide=Math.sign(at);else if(!s.slide)s.slide=w.rand()<.5?-1:1;
           const push=-an*Math.min(1,nl);ax+=ux*push+tx*s.slide*push*.9;ay+=uy*push+ty*s.slide*push*.9;}}
       else s.slide=0;}
-    s.vx+=ax*dt;s.vy+=ay*dt;const damp=Math.exp(-(s.hold?7:2.2)*dt);s.vx*=damp;s.vy*=damp;
+    s.vx+=ax*dt;s.vy+=ay*dt;if(s.penned){const damp=Math.exp(-2.2*dt);s.vx*=damp;s.vy*=damp;}
     const terr=inRect(w.mud,s)?.45:hid?.6:1;
-    const max=(s.penned?14:s.hide?150:(lamb?22+132*s.fear+100*close:16+104*s.fear+120*close))*terr,sp=Math.hypot(s.vx,s.vy);if(sp>max){s.vx*=max/sp;s.vy*=max/sp;}
+    const max=(s.penned?14:s.hide?150:230*lk)*terr,sp=Math.hypot(s.vx,s.vy);if(sp>max){s.vx*=max/sp;s.vy*=max/sp;}
     s.x+=s.vx*dt;s.y+=s.vy*dt;
     if(sp>4){let dh=Math.atan2(s.vy,s.vx)-s.h;dh=Math.atan2(Math.sin(dh),Math.cos(dh));s.h+=dh*Math.min(1,dt*6);}
     collide(w,s);
