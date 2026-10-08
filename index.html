@@ -97,7 +97,7 @@ button.primary{background:var(--accent);color:#2a2410;min-width:96px}
 /* ---------- simulation (pure, no DOM) ---------- */
 const FW=800,FH=500,DOG_MAX=160,DOG_WALK=95,LIMIT=90,DT=1/120,WRONG=3,DOG_OUT=6,DOG_R=12;
 // Calm vs panic: a dog's range is RMIN while it walks and grows to 2*RMIN while it sprints.
-// Inside the range sheep move away gently near the edge and bolt when the dog is close; sprinting also breaks up the flock.
+// Inside the range sheep move away gently near the edge and bolt when the dog is close (top speed climbs past a sprinting dog right at its nose); sprinting also breaks up the flock.
 const RMIN=70,BARK_R=170,BARK_CD=4;
 function rng(seed){return()=>{seed=seed+0x6D2B79F5|0;let t=Math.imul(seed^seed>>>15,1|seed);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
 const lambs=a=>a.map(([x,y])=>[x,y,1]);
@@ -191,14 +191,15 @@ function step(w,dt){
   }
   const S=w.sheep;
   for(const s of S){
-    let ax=0,ay=0,direct=0,panic=0;
+    let ax=0,ay=0,direct=0,panic=0,close=0;
     const lamb=s.kind===1,hid=inBush(w,s);
     s.hold=Math.max(0,(s.hold||0)-dt);s.hide=Math.max(0,(s.hide||0)-dt);
     if(!s.penned)for(const d of w.dogs){const ex=s.x-d.x,ey=s.y-d.y,dd=Math.hypot(ex,ey)||1,R=d.range*(lamb?1.15:1),core=RMIN*(lamb?1.15:1);
       if(dd<45){const q=1-dd/45;ax+=ex/dd*2600*q*q;ay+=ey/dd*2600*q*q;}
       if(dd>=R)continue;
       const q=1-dd/R,near=Math.max(0,1-dd/core); // q: how deep inside the range, near: how close to the dog itself
-      let push=(430*q+900*near*near)*(1+.5*d.sprint);
+      close=Math.max(close,near);
+      let push=(430*q+2400*near*near)*(1+.5*d.sprint);
       if(s.hold)push*=.2;if(hid&&dd>50)push*=.3;if(s.hide)push*=.3;
       const hx=Math.cos(d.h),hy=Math.sin(d.h),ahead=d.moving&&(ex*hx+ey*hy)>0?.8:0;
       ax+=(ex/dd+hx*ahead)*push;ay+=(ey/dd+hy*ahead)*push;
@@ -232,7 +233,7 @@ function step(w,dt){
       else s.slide=0;}
     s.vx+=ax*dt;s.vy+=ay*dt;const damp=Math.exp(-(s.hold?7:2.2)*dt);s.vx*=damp;s.vy*=damp;
     const terr=inRect(w.mud,s)?.45:hid?.6:1;
-    const max=(s.penned?14:s.hide?150:lamb?22+132*s.fear:16+104*s.fear)*terr,sp=Math.hypot(s.vx,s.vy);if(sp>max){s.vx*=max/sp;s.vy*=max/sp;}
+    const max=(s.penned?14:s.hide?150:(lamb?22+132*s.fear+100*close:16+104*s.fear+120*close))*terr,sp=Math.hypot(s.vx,s.vy);if(sp>max){s.vx*=max/sp;s.vy*=max/sp;}
     s.x+=s.vx*dt;s.y+=s.vy*dt;
     if(sp>4){let dh=Math.atan2(s.vy,s.vx)-s.h;dh=Math.atan2(Math.sin(dh),Math.cos(dh));s.h+=dh*Math.min(1,dt*6);}
     collide(w,s);
