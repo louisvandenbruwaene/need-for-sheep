@@ -215,6 +215,10 @@ function step(w,dt){
       if(mate&&dd<(lamb?60:90)){n++;cx+=o.x;cy+=o.y;vx+=o.vx;vy+=o.vy;nf=Math.max(nf,o.fear);}}
     s.fear=Math.max(direct,nf*(lamb?.45:.7)*(1-.4*s.panic),s.fear-dt*(lamb?.9:.6)*(hid?3:1));
     let dvx=fx+Ax*3,dvy=fy+Ay*3; // 1 and 3: flee, plus the slow drift that never stops
+    if(!s.penned){ // a slight pull toward mid-field, stronger the nearer a corner, never toward a dog or away from the gate
+      const mx=(FW/2-s.x)/(FW/2),my=(FH/2-s.y)/(FH/2),e2=mx*mx+my*my,ml=Math.sqrt(e2)||1;
+      let gk=1;for(const G of w.pens)if(G.kind==null||G.kind===s.kind)gk=Math.min(gk,Math.max(0,Math.hypot(G.ox-s.x,G.oy-s.y)-60)/140); // fades out by its own pen's gate
+      let px=mx/ml*3*e2*gk,py=my/ml*3*e2*gk;const back=px*Ax+py*Ay;if(back<0){px-=back*Ax;py-=back*Ay;}dvx+=px;dvy+=py;}
     if(n&&!s.penned){cx/=n;cy/=n;vx/=n;vy/=n;
       const loose=1-.6*s.panic,gx=cx-s.x,gy=cy-s.y,gl=Math.hypot(gx,gy)||1; // a running dog loosens the flock
       const gv=Math.min(gl*2.2,s.hold?60:(22+80*s.fear)*(lamb?.6:1))*loose;
