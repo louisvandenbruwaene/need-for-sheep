@@ -14,11 +14,11 @@ alter table scores add column if not exists ghost jsonb check (ghost is null or 
 alter table scores enable row level security;
 
 -- A time well under the herding bot's best run is not a real run. One entry per level, index = level number - 1.
--- The floors are 0.7 x the bot's best time; re-run this file after adding or changing levels.
+-- The floors are 0.7 x the best bot time (tools/bot.cjs, or the older bot where that was faster);
+-- re-run this file after adding or changing levels.
 drop policy if exists "anyone adds a plausible time" on scores;
 create policy "anyone adds a plausible time" on scores for insert to anon
-  with check (time >= (array[3,2.5,7,4.5,6.5,4.5,7.5,10,9,6,2.5,13.5,10.5,10.5,10.5,5,15,16,4,10.5,10,12,4,17.5,31.5,7.5,20.5,5.5,14.5,24.5,10,5.5,
-                             9.5,7,19.5,37.5])[level + 1]);
+  with check (time >= (array[2.5,2.5,4.5,4.5,6.5,2.5,3.5,10,9,6,2.5,12,9,10.5,10.5,5,15,16,4,3,10,12,4,17.5,31.5,7.5,20.5,5.5,14.5,24.5,10,5.5,9.5,7,12.5,37.5])[level + 1]);
 
 -- The board shows each name once, with its best time and that run's ghost.
 drop view if exists best;

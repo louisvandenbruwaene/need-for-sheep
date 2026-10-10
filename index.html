@@ -58,6 +58,7 @@ button.off{opacity:.45}
 .stars{display:flex;justify-content:center;gap:8px}
 .stars span{font-size:44px;line-height:1;color:var(--line)}
 .stars span.on{color:var(--accent);animation:pop .45s cubic-bezier(.3,1.6,.5,1) backwards}
+.best{font-family:var(--f-display);color:var(--accent);min-height:1.2em}
 .goals{display:grid;gap:4px;text-align:left;font-variant-numeric:tabular-nums}
 .goals div{display:flex;gap:8px}.goals .ok{color:var(--good)}.goals .no{color:var(--muted)}
 .res .group{justify-content:center}
@@ -90,6 +91,7 @@ button.off{opacity:.45}
       <div class="res">
         <h2 id="ovTitle"></h2>
         <div class="stars" id="ovStars"></div>
+        <div class="best" id="ovBest"></div>
         <div class="goals" id="ovGoals"></div>
         <button class="board-open" id="boardOpen">Leaderboard</button>
         <div class="board" id="board" hidden>
@@ -147,7 +149,7 @@ const inRect=(rects,p)=>rects.some(([x,y,w,h])=>p.x>x&&p.x<x+w&&p.y>y&&p.y<y+h);
 const inBush=(world,p)=>world.bushes.some(([x,y,r])=>Math.hypot(p.x-x,p.y-y)<r);
 const isSheep=body=>body.kind!==undefined;
 const fitsPen=(P,s)=>P.kind===undefined||P.kind===s.kind;
-const insidePen=(P,s)=>s.x>P.x+9&&s.x<P.x+P.w-9&&s.y>P.y+9&&s.y<P.y+P.h-9;
+const insidePen=(P,s,margin=9)=>s.x>P.x+margin&&s.x<P.x+P.w-margin&&s.y>P.y+margin&&s.y<P.y+P.h-margin;
 const bodyRadius=body=>body.kind?6:8;
 
 // Remove any part of the vector (x,y) that points against the unit direction (ux,uy).
@@ -187,11 +189,11 @@ function cluster(cx,cy,count,spread,seed){
 const LEVELS=[
   {name:'First sheep',dogs:[[90,250]],sheep:[[330,262]],pen:{x:640,y:190,w:120,h:120,gate:'left'},par:{time:8,gold:6}},
   {name:'A few more',dogs:[[90,410]],sheep:cluster(320,190,3,35,2),pen:{x:640,y:190,w:120,h:120,gate:'left'},par:{time:7,gold:5}},
-  {name:'The rock',dogs:[[80,250]],sheep:cluster(250,250,5,45,3),rocks:[[450,250,48]],pen:{x:640,y:190,w:120,h:120,gate:'left'},par:{time:29,gold:21}},
+  {name:'The rock',dogs:[[80,250]],sheep:cluster(250,250,5,45,3),rocks:[[450,250,48]],pen:{x:640,y:190,w:120,h:120,gate:'left'},par:{time:16,gold:11}},
   {name:'Up the hill',dogs:[[40,470]],sheep:cluster(170,370,8,45,4),pen:{x:335,y:16,w:130,h:110,gate:'bottom'},par:{time:11,gold:8}},
   {name:'Second dog',dogs:[[50,120],[50,380]],sheep:[...cluster(240,110,5,38,6),...cluster(240,390,5,38,7)],pen:{x:650,y:185,w:120,h:130,gate:'left'},par:{time:21,gold:15}},
-  {name:'Fence line',dogs:[[50,150],[50,350]],sheep:cluster(220,250,10,60,8),fences:[[430,16,430,200],[430,300,430,484]],pen:{x:650,y:185,w:120,h:130,gate:'left'},par:{time:12,gold:9}},
-  {name:'Big flock',dogs:[[40,90],[40,250],[40,410]],sheep:cluster(290,250,20,95,12),rocks:[[520,140,36],[520,360,36]],pen:{x:650,y:180,w:130,h:140,gate:'left'},par:{time:22,gold:16}},
+  {name:'Fence line',dogs:[[50,150],[50,350]],sheep:cluster(220,250,10,60,8),fences:[[430,16,430,200],[430,300,430,484]],pen:{x:650,y:185,w:120,h:130,gate:'left'},par:{time:10,gold:7}},
+  {name:'Big flock',dogs:[[40,90],[40,250],[40,410]],sheep:cluster(290,250,20,95,12),rocks:[[520,140,36],[520,360,36]],pen:{x:650,y:180,w:130,h:140,gate:'left'},par:{time:13,gold:9}},
   {name:'Scattered',dogs:[[30,120],[30,250],[30,380]],sheep:[...cluster(210,130,5,30,9),...cluster(160,250,5,30,10),...cluster(210,370,5,30,11)],pen:{x:650,y:180,w:130,h:140,gate:'left'},par:{time:25,gold:18}},
   {name:'Corner pen',dogs:[[40,460]],sheep:cluster(200,330,8,50,21),rocks:[[420,250,40],[560,380,30]],pen:{x:640,y:16,w:140,h:120,gate:'bottom'},par:{time:24,gold:17}},
   {name:'Needle gap',dogs:[[40,250]],sheep:cluster(200,250,8,55,22),fences:[[420,16,420,330],[420,410,420,484]],pen:{x:650,y:190,w:130,h:120,gate:'left'},par:{time:15,gold:11}},
@@ -204,23 +206,23 @@ const LEVELS=[
   {name:'Middle pen',dogs:[[40,40],[760,460]],sheep:[...cluster(140,400,5,35,28),...cluster(660,110,5,35,29)],pen:{x:335,y:190,w:130,h:120,gate:'top'},par:{time:46,gold:33}},
   {name:'Zigzag',dogs:[[40,400]],sheep:cluster(150,400,8,45,30),fences:[[290,140,290,484],[510,16,510,360]],pen:{x:650,y:190,w:130,h:120,gate:'left'},par:{time:37,gold:27}},
   {name:'Stampede',dogs:[[40,250]],sheep:cluster(230,250,25,90,31),pen:{x:650,y:180,w:130,h:140,gate:'left'},par:{time:22,gold:16}},
-  {name:'Both ways',tip:'Ewes to the ewe pen, lambs to the lamb pen. A sheep in the wrong pen does not count.',dogs:[[400,40],[400,460]],sheep:[...cluster(280,140,6,40,55),...lambs(cluster(520,360,6,40,56))],fences:[[400,110,400,390]],pens:[{x:20,y:185,w:130,h:130,gate:'right',kind:EWE},{x:650,y:185,w:130,h:130,gate:'left',kind:LAMB}],par:{time:46,gold:33}},
+  {name:'Both ways',tip:'Ewes to the ewe pen, lambs to the lamb pen. A sheep in the wrong pen does not count.',dogs:[[400,40],[400,460]],sheep:[...cluster(280,140,6,40,55),...lambs(cluster(520,360,6,40,56))],fences:[[400,110,400,390]],pens:[{x:20,y:185,w:130,h:130,gate:'right',kind:EWE},{x:650,y:185,w:130,h:130,gate:'left',kind:LAMB}],par:{time:10,gold:7}},
   {name:'Funnel',dogs:[[40,120],[40,380]],sheep:cluster(210,250,14,80,32),fences:[[380,16,560,200],[380,484,560,300]],rocks:[[260,250,30]],pen:{x:650,y:190,w:130,h:120,gate:'left'},par:{time:33,gold:24}},
   {name:'Hill top',dogs:[[400,470],[60,250]],sheep:[...cluster(140,380,6,40,33),...cluster(660,380,6,40,34)],rocks:[[400,300,40]],pen:{x:335,y:16,w:130,h:110,gate:'bottom'},par:{time:32,gold:23}},
   {name:'Lambs uphill',dogs:[[40,420],[760,460]],sheep:[...cluster(200,380,6,50,57),...lambs(cluster(200,380,6,50,58))],rocks:[[300,250,34],[500,250,34]],pen:{x:335,y:16,w:130,h:110,gate:'bottom'},par:{time:59,gold:43},limit:110},
   {name:'Three gaps',dogs:[[40,250]],sheep:cluster(160,250,8,45,35),fences:[[280,16,280,330],[430,170,430,484],[580,16,580,330]],pen:{x:650,y:190,w:130,h:120,gate:'left'},par:{time:41,gold:30}},
   {name:'Four corners',dogs:[[400,40],[400,460],[60,250]],sheep:[...cluster(90,80,4,28,36),...cluster(710,80,4,28,37),...cluster(90,420,4,28,38),...cluster(710,420,4,28,39)],pen:{x:335,y:190,w:130,h:120,gate:'bottom'},par:{time:88,gold:63},limit:160},
-  {name:'Market day',tip:'A lamb strayed in with the ewes, and a ewe in with the lambs.',dogs:[[40,90],[40,250],[40,410]],sheep:[...cluster(220,110,7,45,59),...lambs([[300,150]]),...lambs(cluster(220,390,7,45,60)),[300,350]],fences:[[150,250,560,250]],pens:[{x:650,y:30,w:130,h:130,gate:'left',kind:EWE},{x:650,y:340,w:130,h:130,gate:'left',kind:LAMB}],par:{time:71,gold:51},limit:130},
+  {name:'Market day',tip:'A lamb strayed in with the ewes, and a ewe in with the lambs.',dogs:[[40,90],[40,250],[40,410]],sheep:[...cluster(220,110,7,45,59),...lambs([[300,150]]),...lambs(cluster(220,390,7,45,60)),[300,350]],fences:[[150,250,560,250]],pens:[{x:650,y:30,w:130,h:130,gate:'left',kind:EWE},{x:650,y:340,w:130,h:130,gate:'left',kind:LAMB}],par:{time:149,gold:106},limit:190},
   {name:'Big round',dogs:[[40,90],[40,410]],sheep:cluster(200,250,20,80,40),fences:[[560,90,560,410]],rocks:[[400,140,30],[400,360,30]],pen:{x:620,y:190,w:130,h:120,gate:'right'},par:{time:57,gold:41},limit:110},
   {name:'Flock of thirty',dogs:[[40,90],[40,250],[40,410]],sheep:[...cluster(200,110,10,50,41),...cluster(200,390,10,50,42),...cluster(420,250,10,50,43)],rocks:[[560,120,30],[560,380,30]],pen:{x:650,y:180,w:130,h:140,gate:'left'},par:{time:33,gold:24}},
-  {name:'Shepherd’s test',tip:'Bark and the lambs run round behind the ewes. Use it to split the flock.',dogs:[[40,90],[40,250],[40,410]],sheep:[...cluster(220,250,10,70,65),...lambs(cluster(220,250,10,70,66))],pens:[{x:650,y:16,w:130,h:130,gate:'bottom',kind:EWE},{x:650,y:354,w:130,h:130,gate:'top',kind:LAMB}],fences:[[460,16,460,170],[460,330,460,484]],par:{time:150,gold:110},limit:260},
+  {name:'Shepherd’s test',tip:'Bark and the lambs run round behind the ewes. Use it to split the flock.',dogs:[[40,90],[40,250],[40,410]],sheep:[...cluster(220,250,10,70,65),...lambs(cluster(220,250,10,70,66))],pens:[{x:650,y:16,w:130,h:130,gate:'bottom',kind:EWE},{x:650,y:354,w:130,h:130,gate:'top',kind:LAMB}],fences:[[460,16,460,170],[460,330,460,484]],par:{time:82,gold:58},limit:160},
   {name:'Grand trial',dogs:[[40,90],[40,250],[40,410]],sheep:[...cluster(150,120,8,40,44),...cluster(150,380,8,40,45),...cluster(330,250,8,40,46)],fences:[[440,16,440,320],[580,180,580,484]],rocks:[[250,250,26]],pen:{x:650,y:16,w:130,h:130,gate:'bottom'},par:{time:59,gold:43},limit:110},
   {name:'Woof!',tip:'Space or Bark: ewes huddle and stray lambs run back behind them.',dogs:[[40,250]],sheep:[...cluster(300,250,6,30,71),...lambs(cluster(300,250,6,130,72))],pen:{x:650,y:185,w:130,h:130,gate:'left'},par:{time:40,gold:29}},
   {name:'The bridge',tip:'Sheep will not swim. Your dog will, slowly.',dogs:[[40,250]],sheep:cluster(200,250,10,55,73),water:[[390,0,60,212],[390,288,60,212]],bridges:[[390,212,60,76]],pen:{x:650,y:185,w:130,h:130,gate:'left'},par:{time:14,gold:10}},
   {name:'Mud flats',tip:'Mud slows everyone down. Go round, or push through.',dogs:[[40,420]],sheep:cluster(180,380,10,50,74),mud:[[260,40,190,170],[300,260,170,200],[520,150,110,190]],pen:{x:650,y:16,w:130,h:120,gate:'bottom'},par:{time:23,gold:16}},
   {name:'Hide and seek',tip:'Scared sheep hide in bushes. Walk, do not sprint, and go in close to flush them out.',dogs:[[40,120],[40,380]],sheep:[...cluster(230,120,3,25,75),...cluster(380,330,3,25,76),...cluster(200,400,3,25,77),...cluster(470,120,3,25,78)],bush:[[280,160,38],[430,300,42],[250,330,34],[520,170,36]],pen:{x:650,y:185,w:130,h:130,gate:'left'},par:{time:28,gold:20}},
-  {name:'River crossing',tip:'Only the bridge crosses the river. Bark to call stray lambs back.',dogs:[[40,440],[40,330]],sheep:[...cluster(220,400,6,45,79),...lambs(cluster(220,400,6,45,80))],water:[[0,225,350,50],[450,225,350,50]],bridges:[[350,225,100,50]],pen:{x:650,y:40,w:130,h:130,gate:'left'},par:{time:70,gold:50},limit:130},
-  {name:'Farm day',tip:'Everything at once. Walk, bark, and use the bridge.',dogs:[[40,90],[40,250],[40,410]],sheep:[...cluster(200,180,7,45,81),...lambs(cluster(200,300,7,45,82))],water:[[520,0,50,205],[520,275,50,225]],bridges:[[520,205,50,70]],mud:[[300,60,140,120]],bush:[[330,390,40]],pens:[{x:650,y:30,w:130,h:130,gate:'bottom',kind:EWE},{x:650,y:340,w:130,h:130,gate:'top',kind:LAMB}],par:{time:125,gold:90},limit:220}
+  {name:'River crossing',tip:'Only the bridge crosses the river. Bark to call stray lambs back.',dogs:[[40,440],[40,330]],sheep:[...cluster(220,400,6,45,79),...lambs(cluster(220,400,6,45,80))],water:[[0,225,350,50],[450,225,350,50]],bridges:[[350,225,100,50]],pen:{x:650,y:40,w:130,h:130,gate:'left'},par:{time:40,gold:28},limit:130},
+  {name:'Farm day',tip:'Everything at once. Walk, bark, and use the bridge.',dogs:[[40,90],[40,250],[40,410]],sheep:[...cluster(200,180,7,45,81),...lambs(cluster(200,300,7,45,82))],water:[[520,0,50,205],[520,275,50,225]],bridges:[[520,205,50,70]],mud:[[300,60,140,120]],bush:[[330,390,40]],pens:[{x:650,y:30,w:130,h:130,gate:'bottom',kind:EWE},{x:650,y:340,w:130,h:130,gate:'top',kind:LAMB}],par:{time:170,gold:121},limit:220}
 ];
 
 // Levels grouped into farms, in play order. The numbers index LEVELS, which keeps its order so that
@@ -502,7 +504,7 @@ function keepOffDogs(world,s,dt){
 // A sheep inside a pen that takes its kind is penned and counted. One inside the other kind's pen
 // is not counted and stays free, to wander out or be driven out.
 function checkPens(world,s){
-  const P=world.pens.find(P=>insidePen(P,s));
+  const P=world.pens.find(P=>insidePen(P,s,fitsPen(P,s)?9:0)); // the wrong kind counts as inside even against the wall
   if(P&&fitsPen(P,s)){
     s.penned=P;s.wrongPen=null;s.fear=0;world.penned++;
     world.events.push({type:'pen',x:s.x,y:s.y});
@@ -512,10 +514,18 @@ function checkPens(world,s){
   s.wrongPen=P||null;
 }
 
-// A gate shuts once every sheep its pen takes is penned and no sheep of the other kind stands inside.
+// distance from point p to the segment [x1,y1,x2,y2]
+function segmentDistance(p,[x1,y1,x2,y2]){
+  const ex=x2-x1,ey=y2-y1,u=clamp(((p.x-x1)*ex+(p.y-y1)*ey)/(ex*ex+ey*ey),0,1);
+  return Math.hypot(p.x-x1-ex*u,p.y-y1-ey*u);
+}
+// A gate shuts once every sheep its pen takes is penned, no sheep of the other kind stands inside,
+// and nobody is in the gateway (a gate shutting on a sheep would push it into the wrong pen for good).
 function shutGates(world){
   for(const P of world.pens){
-    if(P.shut||world.sheep.some(s=>!s.penned&&(fitsPen(P,s)||s.wrongPen===P)))continue;
+    if(P.shut)continue;
+    const gate=gateOpening(P);
+    if(world.sheep.some(s=>!s.penned&&(fitsPen(P,s)||s.wrongPen===P||segmentDistance(s,gate)<30)))continue;
     P.shut=true;world.walls.push(gateOpening(P));
     world.events.push({type:'shut',pen:P});
   }
@@ -609,7 +619,7 @@ canvas.width=FIELD_W*DPR;canvas.height=FIELD_H*DPR;
 const reducedMotion=matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 let levelIndex=0,level,world,selected=0;
-let mode='ready';      // ready -> play -> done
+let mode='ready';      // ready -> play (<-> paused) -> closing -> done
 let timeBank=0;        // real time not yet simulated, in seconds
 let popups=[],barkRings=[],grass=[],dust=[];
 let endTime=0,closingUntil=0; // the winning time, and when the slow-motion gate close hands over to the results
@@ -760,13 +770,20 @@ function reset(){
   $('#ov').hidden=true;
 }
 function start(){if(mode==='ready')mode='play';}
+function pause(on){
+  if(on&&mode==='play'){mode='paused';keys.clear();pointerHeld=false;}
+  else if(!on&&mode==='paused')mode='play';
+}
+const clockRunning=()=>mode==='ready'||mode==='play'||mode==='paused'; // before the win or time-out, the clock shows world.t
 const timeLimit=()=>level.limit||LIMIT;
 const nextLevel=()=>ORDER[ORDER.indexOf(levelIndex)+1];
 function finish(win){
   mode='done';pointerHeld=false;
   if(!win)endTime=world.t;
   const t=endTime,par=level.par,sorting=world.pens.some(P=>P.kind!==undefined);
+  const best=myGhosts[levelIndex]?.time;
   if(win){fanfare();saveMyGhost(t);}else timeUp();
+  $('#ovBest').textContent=!win?'':best===undefined||t<best?'New best!':`Best ${best.toFixed(1)} s`;
   const goals=[
     [win,sorting?'Every sheep in its own pen':'Every sheep penned',`${world.penned}/${world.sheep.length}`],
     [win&&t<=par.time,`Under ${par.time} s`,`${t.toFixed(1)} s`],
@@ -856,6 +873,7 @@ const playing=()=>mode==='ready'||mode==='play';
 const nextDog=()=>pickDog((selected+1)%level.dogs.length);
 canvas.addEventListener('pointerdown',e=>{
   audioCtx();
+  if(mode==='paused'&&e.button!==2){pause(false);return;}
   if(e.button===2||!playing())return; // right button: next dog, see contextmenu
   const p=toField(e);
   let hit=-1,best=30;
@@ -885,6 +903,9 @@ addEventListener('keydown',e=>{
   shift=e.shiftKey;audioCtx();
   const k=keyName(e);
   if(k===' '){e.preventDefault();if(!e.repeat)doBark();return;}
+  if(k==='p'||k==='Escape'){pause(mode==='play');return;}
+  if(k==='Enter'&&mode==='done'&&e.target.tagName!=='BUTTON'){($('#ovNext').hidden?$('#ovRetry'):$('#ovNext')).click();return;}
+  if(mode==='paused'&&MOVE_KEYS[k])pause(false);
   if(MOVE_KEYS[k]){e.preventDefault();if(playing()){keys.add(k);start();}}
   else if(k>='1'&&k<='3')pickDog(+k-1);
   else if(k==='Tab'){e.preventDefault();nextDog();}
@@ -893,7 +914,7 @@ addEventListener('keydown',e=>{
   else if(k==='g'&&ghost)toggleGhost();
 });
 addEventListener('keyup',e=>{shift=e.shiftKey;keys.delete(keyName(e));});
-addEventListener('blur',()=>{keys.clear();pointerHeld=false;});
+addEventListener('blur',()=>{keys.clear();pointerHeld=false;pause(true);});
 $('#bRestart').onclick=reset;
 $('#bBark').onclick=doBark;
 $('#bSound').onclick=toggleSound;
@@ -1062,7 +1083,7 @@ function ghostAt(path,t){
 }
 function drawGhost(t){
   if(!ghost||!ghostOn)return;
-  const shown=mode==='play'||mode==='ready'?world.t:endTime;
+  const shown=clockRunning()?world.t:endTime;
   ctx.globalAlpha=.4;
   let top=null;
   ghost.dogs.forEach((path,i)=>{
@@ -1121,6 +1142,11 @@ function drawPopups(t){ // "+1" for a penned sheep, a red cross for one in the w
   }
 }
 function drawHint(){
+  if(mode==='paused'){
+    ctx.fillStyle='rgba(18,23,16,.45)';ctx.fillRect(0,0,FIELD_W,FIELD_H);
+    label('Paused',FIELD_W/2,FIELD_H/2-14,40);label('P, Esc or tap to go on',FIELD_W/2,FIELD_H/2+24,18);
+    return;
+  }
   if(mode!=='ready')return;
   const text=level.tip?level.tip
     :level.dogs.length>1?'Drag close to walk, far to sprint. Tab, right-click or tap a dog to switch.'
@@ -1180,7 +1206,7 @@ function frame(now){
   render(now);
   const cooldown=Math.ceil(world.dogs[selected].barkCooldown);
   if(shown.cooldown!==cooldown){shown.cooldown=cooldown;$('#barkCd').textContent=cooldown>0?cooldown+'s':'';$('#bBark').disabled=cooldown>0;}
-  showText('sTime',(mode==='play'||mode==='ready'?world.t:endTime).toFixed(1)+'s');
+  showText('sTime',(clockRunning()?world.t:endTime).toFixed(1)+'s');
   showText('sSheep',`${world.penned}/${world.sheep.length}`);
   $('#sTime').style.color=timeLimit()-world.t<10&&mode==='play'?'var(--bad)':'';
   requestAnimationFrame(frame);
