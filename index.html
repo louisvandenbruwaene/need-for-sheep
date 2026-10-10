@@ -765,7 +765,7 @@ function load(i){
   buildLevels();buildDogs();
 }
 function reset(){
-  world=makeWorld(level);mode='ready';timeBank=0;popups=[];dust=[];pointerHeld=false;gateShut=new Map();
+  world=makeWorld(level);mode='ready';timeBank=0;tutorialStep=0;popups=[];dust=[];pointerHeld=false;gateShut=new Map();
   run=world.dogs.map(()=>[]);recordRun();
   $('#ov').hidden=true;
 }
@@ -1141,12 +1141,33 @@ function drawPopups(t){ // "+1" for a penned sheep, a red cross for one in the w
     ctx.restore();
   }
 }
-function drawHint(){
+// The first level teaches in three prompts. Each moves on once the player has done it, and points at where to go.
+const TUTORIAL=[
+  {text:'1/3  Drag from your dog to move it. Close walks, far sprints.',
+    target:()=>world.dogs[0],done:()=>Math.hypot(world.dogs[0].x-level.dogs[0][0],world.dogs[0].y-level.dogs[0][1])>40},
+  {text:'2/3  Sheep run from your dog. Walk up behind it.',
+    target:()=>{const s=world.sheep[0],[x1,y1,x2,y2]=gateOpening(world.pens[0]),gx=(x1+x2)/2-s.x,gy=(y1+y2)/2-s.y,d=Math.hypot(gx,gy)||1;
+      return {x:s.x-gx/d*55,y:s.y-gy/d*55};},
+    done:()=>world.sheep[0].fear>.15},
+  {text:'3/3  Ease it through the open gate. Sprinting scatters sheep.',
+    target:()=>{const [x1,y1,x2,y2]=gateOpening(world.pens[0]);return {x:(x1+x2)/2,y:(y1+y2)/2};},done:()=>false},
+];
+let tutorialStep=0;
+const inTutorial=()=>levelIndex===ORDER[0]&&(mode==='ready'||mode==='play')&&world.penned===0;
+function drawTutorial(t){
+  while(tutorialStep<TUTORIAL.length-1&&TUTORIAL[tutorialStep].done())tutorialStep++;
+  const {text,target}=TUTORIAL[tutorialStep],{x,y}=target(),pulse=(t*1.2)%1;
+  ctx.strokeStyle=`rgba(255,255,255,${.85*(1-pulse)})`;ctx.lineWidth=3;
+  ctx.beginPath();ctx.arc(x,y,14+22*pulse,0,7);ctx.stroke();
+  label(text,FIELD_W/2,34);
+}
+function drawHint(t){
   if(mode==='paused'){
     ctx.fillStyle='rgba(18,23,16,.45)';ctx.fillRect(0,0,FIELD_W,FIELD_H);
     label('Paused',FIELD_W/2,FIELD_H/2-14,40);label('P, Esc or tap to go on',FIELD_W/2,FIELD_H/2+24,18);
     return;
   }
+  if(inTutorial())return drawTutorial(t);
   if(mode!=='ready')return;
   const text=level.tip?level.tip
     :level.dogs.length>1?'Drag close to walk, far to sprint. Tab, right-click or tap a dog to switch.'
@@ -1172,7 +1193,7 @@ function render(now){
   drawBarkRings(t);
   drawDogs(t);
   drawPopups(t);
-  drawHint();
+  drawHint(t);
 }
 
 /* ---------- main loop ---------- */
