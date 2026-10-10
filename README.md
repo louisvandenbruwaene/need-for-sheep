@@ -2,7 +2,7 @@
 
 Need for Sheep: herd the flock into the pen with one, two or three dogs, and sort ewes from lambs. 36 levels over six farms. One HTML file plus five sound clips in [`audio/`](audio), no build step: open [`index.html`](index.html).
 
-The first level is a three-step tutorial: each prompt points at where to go and moves on once you have done it.
+Two levels carry a three-step tutorial: the first level teaches herding, Shepherd's test teaches splitting a flock with a bark. Each prompt points at where to go and moves on once you have done it.
 
 Controls: drag to run the dog (close to walk, far to sprint) or arrow keys / WASD with Shift to sprint. Space barks. Tab or right-click switches dog, 1-3 picks one. P or Esc pauses (so does leaving the window), R restarts, M mutes, G hides the ghost, Enter goes on from the results.
 
