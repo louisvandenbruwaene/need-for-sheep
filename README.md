@@ -2,6 +2,8 @@
 
 Need for Sheep: herd the flock into the pen with one, two or three dogs, and sort ewes from lambs. 36 levels over six farms. One HTML file plus five sound clips in [`audio/`](audio), no build step: open [`index.html`](index.html).
 
+The first level is a three-step tutorial: each prompt points at where to go and moves on once you have done it.
+
 Controls: drag to run the dog (close to walk, far to sprint) or arrow keys / WASD with Shift to sprint. Space barks. Tab or right-click switches dog, 1-3 picks one. P or Esc pauses (so does leaving the window), R restarts, M mutes, G hides the ghost, Enter goes on from the results.
 
 Sorting pens are labelled EWES or LAMBS. They take any sheep but only count their own kind, and a sheep in the wrong pen stays free to be driven out. A gate swings shut once its pen holds every sheep it needs. Your best run on each level comes back as a ghost dog to race.
