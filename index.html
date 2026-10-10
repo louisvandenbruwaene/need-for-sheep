@@ -621,13 +621,13 @@ let stars={};
 try{stars=JSON.parse(localStorage.getItem(STARS_KEY)||'{}')||{};}catch(e){stars={};}
 function saveStars(){try{localStorage.setItem(STARS_KEY,JSON.stringify(stars));}catch(e){}}
 
-/* ---------- sound: three recorded clips (bark, ewe, lamb), the rest synthesised ---------- */
+/* ---------- sound: recorded bark and bleats (two voices per kind, loudness-matched), the rest synthesised ---------- */
 const SOUND_KEY='need-for-sheep-sound';
 let soundOn=true;
 try{soundOn=localStorage.getItem(SOUND_KEY)!=='off';}catch(e){}
 // <audio> elements rather than Web Audio buffers, because a page opened from file:// may not fetch its own files
 const clips={};
-for(const name of ['waf','meh','mehhh'])clips[name]=Array.from({length:4},()=>{
+for(const name of ['waf','ewe-1','ewe-2','lamb-1','lamb-2'])clips[name]=Array.from({length:4},()=>{
   const a=new Audio(`audio/${name}.mp3`);a.preload='auto';a.preservesPitch=false;return a;
 });
 let clipTurn=0;
@@ -662,18 +662,20 @@ const wrongBuzz=()=>{tone(233,{length:.12,volume:.07,type:'square',endFreq:200})
 const gateThud=delay=>{tone(150,{delay,length:.2,volume:.4,type:'sine',endFreq:55});tone(440,{delay,length:.05,volume:.1,endFreq:220});};
 const fanfare=()=>[523,659,784,1047].forEach((f,i)=>tone(f,{delay:i*.1,length:i<3?.25:.6,volume:.14}));
 const timeUp=()=>[392,330,262].forEach((f,i)=>tone(f,{delay:i*.16,length:.3,volume:.12}));
-let lastBleat=0,nextIdleBleat=3;
+let lastBleat=0,nextIdleBleat=3,lastVoice=[1,1];
 function bleat(kind,volume){
   const t=performance.now()/1000;
   if(t-lastBleat<.28)return; // a scared flock bleats a few times, not once per sheep
   lastBleat=t;
-  playClip(kind===LAMB?'mehhh':'meh',volume,(kind===LAMB?1.02:.93)+Math.random()*.15);
+  const voice=Math.random()<.7?3-lastVoice[kind]:lastVoice[kind]; // mostly alternate the two voices
+  lastVoice[kind]=voice;
+  playClip(`${kind===LAMB?'lamb':'ewe'}-${voice}`,volume,.94+Math.random()*.14);
 }
 function idleBleat(t){ // now and then a calm sheep bleats on its own
   if(t<nextIdleBleat)return;
   nextIdleBleat=t+3+Math.random()*5;
   const calm=world.sheep.filter(s=>s.fear<.2);
-  if(calm.length)bleat(calm[Math.random()*calm.length|0].kind,.22);
+  if(calm.length)bleat(calm[Math.random()*calm.length|0].kind,.3);
 }
 function toggleSound(){
   soundOn=!soundOn;
@@ -1154,7 +1156,7 @@ function handleEvent(ev,t){
   if(ev.type==='pen'){popups.push({x:ev.x,y:ev.y,t0:t,text:'+1',colour:'#efbd4c'});penChime(t);}
   else if(ev.type==='wrong'){popups.push({x:ev.x,y:ev.y,t0:t,text:'✗',colour:'#ef7b6b'});wrongBuzz();}
   else if(ev.type==='shut'){gateShut.set(ev.pen,t);gateThud(GATE_SWING*.85);}
-  else if(ev.type==='bleat')bleat(ev.kind,.5);
+  else if(ev.type==='bleat')bleat(ev.kind,.7);
 }
 const SLOWMO=.35,CLOSING=1.1; // after the last sheep: sim speed, and real seconds before the results
 function frame(now){
