@@ -1,0 +1,17 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Need for Sheep icon</title>
+<style>html,body{margin:0;background:transparent}svg{display:block;width:1024px;height:1024px}</style></head>
+<body><div id="out"></div>
+<script>
+/* The Need for Sheep app icon: a macOS-style rounded square (824px tile, 100px margin) drawn as SVG. */
+const tile=(bg,inner)=>`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024"><defs><clipPath id="c"><rect x="100" y="100" width="824" height="824" rx="185"/></clipPath>
+<linearGradient id="sh" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".18"/><stop offset=".5" stop-color="#fff" stop-opacity="0"/></linearGradient></defs>
+<g clip-path="url(#c)">${bg}${inner}<rect x="100" y="100" width="824" height="824" fill="url(#sh)"/></g></svg>`;
+const fill=(c1,c2)=>`<defs><linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${c1}"/><stop offset="1" stop-color="${c2}"/></linearGradient></defs><rect x="0" y="0" width="1024" height="1024" fill="url(#bg)"/>`;
+const sheep=(x,y,s)=>`<g transform="translate(${x} ${y}) scale(${s})">${[[-40,-20],[0,-35],[40,-20],[-45,20],[0,25],[45,20],[0,-5]].map(([a,b])=>`<circle cx="${a}" cy="${b}" r="42" fill="#f7f4ea" stroke="#d8d0bb" stroke-width="6"/>`).join('')}<ellipse cx="78" cy="-4" rx="34" ry="28" fill="#2e2724"/><ellipse cx="66" cy="-36" rx="12" ry="20" fill="#2e2724" transform="rotate(30 66 -36)"/></g>`;
+const ICON=tile(fill('#9cc56f','#5f8f3f'),`${[0,1,2,3,4,5,6,7,8,9,10].map(i=>`<rect x="${100+i*80}" y="100" width="40" height="824" fill="#000" opacity=".05"/>`).join('')}
+    <rect x="560" y="560" width="300" height="300" rx="10" fill="#c4ac6d"/><path d="M560 560 H860 V860 H560 V760 M560 660 V560" stroke="#7d5230" stroke-width="22" fill="none" stroke-linecap="round"/>
+    ${sheep(330,360,1.15)}${sheep(470,610,.9)}
+    <g transform="translate(260 760) rotate(-25)"><ellipse cx="0" cy="0" rx="78" ry="44" fill="#1f1d1d"/><ellipse cx="42" cy="0" rx="28" ry="36" fill="#f4f2ec"/><circle cx="92" cy="0" r="40" fill="#1f1d1d"/><ellipse cx="120" cy="0" rx="20" ry="15" fill="#f4f2ec"/><rect x="58" y="-36" width="16" height="72" fill="#efbd4c"/></g>`);
+document.getElementById('out').innerHTML=ICON;
+</script></body></html>
