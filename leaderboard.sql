@@ -6,8 +6,10 @@ create table if not exists scores (
   level   int  not null check (level between 0 and 35),
   name    text not null check (char_length(name) between 1 and 16),
   time    real not null check (time > 0 and time < 600),
+  ghost   jsonb check (ghost is null or octet_length(ghost::text) < 150000), -- the dogs' paths, 10 samples a second
   created timestamptz not null default now()
 );
+alter table scores add column if not exists ghost jsonb check (ghost is null or octet_length(ghost::text) < 150000);
 
 alter table scores enable row level security;
 
@@ -18,11 +20,12 @@ create policy "anyone adds a plausible time" on scores for insert to anon
   with check (time >= (array[3,2.5,7,4.5,6.5,4.5,7.5,10,9,6,2.5,13.5,10.5,10.5,10.5,5,15,16,4,10.5,10,12,4,17.5,31.5,7.5,20.5,5.5,14.5,24.5,10,5.5,
                              9.5,7,19.5,37.5])[level + 1]);
 
--- The board shows each name once, with its best time.
-create or replace view best with (security_invoker = false) as
-  select level, name, min(time) as time
-  from scores group by level, name;
+-- The board shows each name once, with its best time and that run's ghost.
+drop view if exists best;
+create view best with (security_invoker = false) as
+  select distinct on (level, name) level, name, time, ghost
+  from scores order by level, name, time;
 
 revoke all on scores from anon;
-grant insert (level, name, time) on scores to anon;
+grant insert (level, name, time, ghost) on scores to anon;
 grant select on best to anon;
