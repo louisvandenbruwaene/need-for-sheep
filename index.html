@@ -1141,22 +1141,38 @@ function drawPopups(t){ // "+1" for a penned sheep, a red cross for one in the w
     ctx.restore();
   }
 }
-// The first level teaches in three prompts. Each moves on once the player has done it, and points at where to go.
-const TUTORIAL=[
-  {text:'1/3  Drag from your dog to move it. Close walks, far sprints.',
-    target:()=>world.dogs[0],done:()=>Math.hypot(world.dogs[0].x-level.dogs[0][0],world.dogs[0].y-level.dogs[0][1])>40},
-  {text:'2/3  Sheep run from your dog. Walk up behind it.',
-    target:()=>{const s=world.sheep[0],[x1,y1,x2,y2]=gateOpening(world.pens[0]),gx=(x1+x2)/2-s.x,gy=(y1+y2)/2-s.y,d=Math.hypot(gx,gy)||1;
-      return {x:s.x-gx/d*55,y:s.y-gy/d*55};},
-    done:()=>world.sheep[0].fear>.15},
-  {text:'3/3  Ease it through the open gate. Sprinting scatters sheep.',
-    target:()=>{const [x1,y1,x2,y2]=gateOpening(world.pens[0]);return {x:(x1+x2)/2,y:(y1+y2)/2};},done:()=>false},
-];
+// Two levels teach in three prompts: the first level how to herd, Shepherd's test how a bark splits a flock.
+// Each prompt moves on once the player has done it, and points at where to go.
+const gateMiddle=P=>{const [x1,y1,x2,y2]=gateOpening(P);return {x:(x1+x2)/2,y:(y1+y2)/2};};
+const centreOf=kind=>{const free=world.sheep.filter(s=>s.kind===kind&&!s.penned),n=free.length||1;
+  return {x:free.reduce((t,s)=>t+s.x,0)/n,y:free.reduce((t,s)=>t+s.y,0)/n};};
+const SPLIT_GAP={x:460,y:250}; // the gap between Shepherd's test's two fences
+const TUTORIALS={
+  'First sheep':[
+    {text:'1/3  Drag from your dog to move it. Close walks, far sprints.',
+      target:()=>world.dogs[0],done:()=>Math.hypot(world.dogs[0].x-level.dogs[0][0],world.dogs[0].y-level.dogs[0][1])>40},
+    {text:'2/3  Sheep run from your dog. Walk up behind it.',
+      target:()=>{const s=world.sheep[0],g=gateMiddle(world.pens[0]),gx=g.x-s.x,gy=g.y-s.y,d=Math.hypot(gx,gy)||1;
+        return {x:s.x-gx/d*55,y:s.y-gy/d*55};},
+      done:()=>world.sheep[0].fear>.15},
+    {text:'3/3  Ease it through the open gate. Sprinting scatters sheep.',target:()=>gateMiddle(world.pens[0]),done:()=>false},
+  ],
+  'Shepherd’s test':[
+    {text:'1/3  Walk up to the flock from this side and press Space to bark.',
+      target:()=>{const e=centreOf(EWE),gx=SPLIT_GAP.x-e.x,gy=SPLIT_GAP.y-e.y,d=Math.hypot(gx,gy)||1;
+        return {x:e.x-gx/d*110,y:e.y-gy/d*110};},
+      done:()=>world.dogs.some(dog=>dog.barkCooldown>0)},
+    {text:'2/3  The lambs ran ahead of the ewes. Get them through the gap first.',
+      target:()=>SPLIT_GAP,done:()=>centreOf(LAMB).x>SPLIT_GAP.x||world.penned>0},
+    {text:'3/3  Lambs down, ewes up. Bark again whenever they mix.',
+      target:()=>gateMiddle(world.pens.find(P=>P.kind===LAMB&&!P.shut)||world.pens.find(P=>P.kind===EWE)),done:()=>false},
+  ],
+};
 let tutorialStep=0;
-const inTutorial=()=>levelIndex===ORDER[0]&&(mode==='ready'||mode==='play')&&world.penned===0;
-function drawTutorial(t){
-  while(tutorialStep<TUTORIAL.length-1&&TUTORIAL[tutorialStep].done())tutorialStep++;
-  const {text,target}=TUTORIAL[tutorialStep],{x,y}=target(),pulse=(t*1.2)%1;
+const tutorial=()=>(mode==='ready'||mode==='play')&&world.penned<world.sheep.length?TUTORIALS[level.name]:undefined;
+function drawTutorial(steps,t){
+  while(tutorialStep<steps.length-1&&steps[tutorialStep].done())tutorialStep++;
+  const {text,target}=steps[tutorialStep],{x,y}=target(),pulse=(t*1.2)%1;
   ctx.strokeStyle=`rgba(255,255,255,${.85*(1-pulse)})`;ctx.lineWidth=3;
   ctx.beginPath();ctx.arc(x,y,14+22*pulse,0,7);ctx.stroke();
   label(text,FIELD_W/2,34);
@@ -1167,7 +1183,8 @@ function drawHint(t){
     label('Paused',FIELD_W/2,FIELD_H/2-14,40);label('P, Esc or tap to go on',FIELD_W/2,FIELD_H/2+24,18);
     return;
   }
-  if(inTutorial())return drawTutorial(t);
+  const steps=tutorial();
+  if(steps)return drawTutorial(steps,t);
   if(mode!=='ready')return;
   const text=level.tip?level.tip
     :level.dogs.length>1?'Drag close to walk, far to sprint. Tab, right-click or tap a dog to switch.'
