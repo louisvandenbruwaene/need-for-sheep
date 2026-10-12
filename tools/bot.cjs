@@ -7,7 +7,7 @@ const G={module:{exports:{}}};vm.createContext(G);
 vm.runInContext(html.match(/<script id="sim">([\s\S]*?)<\/script>/)[1],G);
 const {LEVELS,ORDER,makeWorld,step,DT,LIMIT,DOG_WALK,DOG_MAX}=G.module.exports;
 
-const CELL=10,GW=80,GH=50;
+let CELL=10,GW=80,GH=50; // path grid, sized to each level's field in play(): coarser on the big fields
 const segDist=(px,py,[x1,y1,x2,y2])=>{const ex=x2-x1,ey=y2-y1,u=Math.max(0,Math.min(1,((px-x1)*ex+(py-y1)*ey)/(ex*ex+ey*ey)));return Math.hypot(px-x1-ex*u,py-y1-ey*u);};
 const inR=(rects,x,y)=>rects.some(([rx,ry,w,h])=>x>rx&&x<rx+w&&y>ry&&y<ry+h);
 
@@ -15,10 +15,10 @@ const inR=(rects,x,y)=>rects.some(([rx,ry,w,h])=>x>rx&&x<rx+w&&y>ry&&y<ry+h);
 function costGrid(world,forDog){
   const c=new Float64Array(GW*GH);
   for(let j=0;j<GH;j++)for(let i=0;i<GW;i++){
-    const x=i*CELL+5,y=j*CELL+5;let k=1;
-    if(!forDog&&(x<14||x>786||y<14||y>486))k=Infinity;
+    const x=i*CELL+CELL/2,y=j*CELL+CELL/2;let k=1;
+    if(!forDog&&(x<14||x>world.W-14||y<14||y>world.H-14))k=Infinity;
     if(world.rocks.some(([rx,ry,r])=>Math.hypot(x-rx,y-ry)<r+(forDog?10:7)))k=Infinity;
-    if(world.walls.some(w=>segDist(x,y,w)<8))k=Infinity;
+    if(world.walls.some(w=>segDist(x,y,w)<Math.max(8,CELL*.75)))k=Infinity; // a wall blocks every cell it passes through
     if(inR(world.water,x,y))k=forDog?k*2.3:Infinity;
     if(inR(world.mud,x,y))k*=1.9;
     c[j*GW+i]=k;
@@ -55,14 +55,16 @@ function downhill(d,x,y){
 }
 
 function play(level,{sprintFrom,behind}){
-  const world=makeWorld(level),sheepCost=costGrid(world,false),dogCost=costGrid(world,true);
+  const world=makeWorld(level);
+  CELL=world.W>800?20:10;GW=Math.ceil(world.W/CELL);GH=Math.ceil(world.H/CELL);
+  const stuckAfter=35*Math.max(1,(world.W+world.H)/1300),sheepCost=costGrid(world,false),dogCost=costGrid(world,true);
   const penFields=world.pens.map(P=>field(sheepCost,P.x+P.w/2,P.y+P.h/2));
   const fits=(P,s)=>P.kind===undefined||P.kind===s.kind;
   const goalField=s=>{let best=null,bd=Infinity;world.pens.forEach((P,k)=>{if(!fits(P,s)||P.shut)return;const v=penFields[k][cellOf(s.x,s.y)];if(v<bd){bd=v;best=penFields[k];}});return best||penFields[0];};
   let active=0,dogField=null,lastPlan=-1,limit=level.limit||LIMIT,target=[0,0],progressAt=0,lastPenned=0;
   while(world.t<limit){
     if(world.penned>lastPenned){lastPenned=world.penned;progressAt=world.t;}
-    if(world.t-progressAt>35)break; // stuck: this style will not finish
+    if(world.t-progressAt>stuckAfter)break; // stuck: this style will not finish
     if(world.penned===world.sheep.length)return {time:world.t,penned:world.penned,total:world.sheep.length};
     if(world.t-lastPlan>=.1){
       lastPlan=world.t;
@@ -80,11 +82,12 @@ function play(level,{sprintFrom,behind}){
         let gx=0,gy=0;for(const s of group){const [a,b]=downhill(goalField(s),s.x,s.y);gx+=a;gy+=b;}
         const gl=Math.hypot(gx,gy)||1,R=fd+10;target=[cx-gx/gl*(R+behind),cy-gy/gl*(R+behind)];
       }
-      target=[Math.max(8,Math.min(792,target[0])),Math.max(8,Math.min(492,target[1]))];
+      target=[Math.max(8,Math.min(world.W-8,target[0])),Math.max(8,Math.min(world.H-8,target[1]))];
       // switch to the dog with the shortest way there (like pressing Tab)
       const crowd=new Uint8Array(GW*GH); // cells near free sheep: the dog goes round them, not through
-      for(const s of free){const ci=s.x/CELL|0,cj=s.y/CELL|0;for(let j=cj-6;j<=cj+6;j++)for(let i=ci-6;i<=ci+6;i++)
-        if(i>=0&&j>=0&&i<GW&&j<GH&&Math.hypot(i*CELL+5-s.x,j*CELL+5-s.y)<62)crowd[j*GW+i]=1;}
+      const reach=Math.ceil(62/CELL);
+      for(const s of free){const ci=s.x/CELL|0,cj=s.y/CELL|0;for(let j=cj-reach;j<=cj+reach;j++)for(let i=ci-reach;i<=ci+reach;i++)
+        if(i>=0&&j>=0&&i<GW&&j<GH&&Math.hypot(i*CELL+CELL/2-s.x,j*CELL+CELL/2-s.y)<62)crowd[j*GW+i]=1;}
       const fieldTo=field(dogCost,target[0],target[1],n=>crowd[n]?7:1);
       const dist=world.dogs.map(d=>fieldTo[cellOf(d.x,d.y)]);
       const bestDog=dist.indexOf(Math.min(...dist));if(dist[bestDog]<dist[active]-25)active=bestDog;

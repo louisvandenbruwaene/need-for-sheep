@@ -123,7 +123,7 @@ button.off{opacity:.45}
 /* ---------- simulation (pure, no DOM) ---------- */
 
 // Field and clock
-const FIELD_W=800,FIELD_H=500;
+const FIELD_W=800,FIELD_H=500;  // the screen, and the default field; a level's field:[w,h] may be larger, then the view follows the dog
 const DT=1/120;               // fixed simulation step, seconds
 const LIMIT=90;               // default time limit per level, seconds
 
@@ -140,7 +140,8 @@ const BARK_RADIUS=170,BARK_COOLDOWN=4;
 const EWE=0,LAMB=1;
 const SHEEP_EDGE=14;          // sheep keep this far off the field edge
 const LAMB_BOOST=1.15;        // lambs are skittish: they notice dogs from further away and run faster
-const GATE_WIDTH=110;
+const GATE_WIDTH=110;          // a pen may set its own gateWidth
+const REJOIN=320;              // a sheep with no flockmate in sight walks back to the nearest one this close
 const HIDE_SEEK=200,HIDE_SPEED=100; // after a bark, lambs look for ewes this close and trot (not sprint) behind them
 
 /* ---------- small helpers ---------- */
@@ -222,7 +223,16 @@ const LEVELS=[
   {name:'Mud flats',tip:'Mud slows everyone down. Go round, or push through.',dogs:[[40,420]],sheep:cluster(180,380,10,50,74),mud:[[260,40,190,170],[300,260,170,200],[520,150,110,190]],pen:{x:650,y:16,w:130,h:120,gate:'bottom'},par:{time:23,gold:16}},
   {name:'Hide and seek',tip:'Scared sheep hide in bushes. Walk, do not sprint, and go in close to flush them out.',dogs:[[40,120],[40,380]],sheep:[...cluster(230,120,3,25,75),...cluster(380,330,3,25,76),...cluster(200,400,3,25,77),...cluster(470,120,3,25,78)],bush:[[280,160,38],[430,300,42],[250,330,34],[520,170,36]],pen:{x:650,y:185,w:130,h:130,gate:'left'},par:{time:28,gold:20}},
   {name:'River crossing',tip:'Only the bridge crosses the river. Bark to call stray lambs back.',dogs:[[40,440],[40,330]],sheep:[...cluster(220,400,6,45,79),...lambs(cluster(220,400,6,45,80))],water:[[0,225,350,50],[450,225,350,50]],bridges:[[350,225,100,50]],pen:{x:650,y:40,w:130,h:130,gate:'left'},par:{time:40,gold:28},limit:130},
-  {name:'Farm day',tip:'Everything at once. Walk, bark, and use the bridge.',dogs:[[40,90],[40,250],[40,410]],sheep:[...cluster(200,180,7,45,81),...lambs(cluster(200,300,7,45,82))],water:[[520,0,50,205],[520,275,50,225]],bridges:[[520,205,50,70]],mud:[[300,60,140,120]],bush:[[330,390,40]],pens:[{x:650,y:30,w:130,h:130,gate:'bottom',kind:EWE},{x:650,y:340,w:130,h:130,gate:'top',kind:LAMB}],par:{time:170,gold:121},limit:220}
+  {name:'Farm day',tip:'Everything at once. Walk, bark, and use the bridge.',dogs:[[40,90],[40,250],[40,410]],sheep:[...cluster(200,180,7,45,81),...lambs(cluster(200,300,7,45,82))],water:[[520,0,50,205],[520,275,50,225]],bridges:[[520,205,50,70]],mud:[[300,60,140,120]],bush:[[330,390,40]],pens:[{x:650,y:30,w:130,h:130,gate:'bottom',kind:EWE},{x:650,y:340,w:130,h:130,gate:'top',kind:LAMB}],par:{time:170,gold:121},limit:220},
+  // Open hill: fields bigger than the screen, flocks of forty to fifty, one or two dogs, long fetches.
+  // The bot herds big flocks in pieces and is slow here, so gold is the bot's own time, not 1.5x it.
+  {name:'Hill flock',tip:'The field is bigger than the screen. Tap the map to send your dog round.',field:[1600,1000],dogs:[[800,940]],sheep:cluster(900,230,40,150,90),rocks:[[400,520,40],[1250,600,50]],bush:[[300,250,40]],pen:{x:40,y:740,w:220,h:220,gate:'right',gateWidth:140},par:{time:94,gold:67},limit:240},
+  {name:'The long fetch',tip:'Go wide round the flock, then bring it home at a walk.',field:[2400,1500],dogs:[[200,1420]],sheep:cluster(1900,300,50,220,91),rocks:[[1100,700,60],[1700,1000,45],[600,900,50]],bush:[[2100,700,45],[1300,300,40]],mud:[[900,1050,300,200]],pen:{x:40,y:1240,w:240,h:220,gate:'right',gateWidth:140},par:{time:352,gold:251},limit:450},
+  {name:'Through the gateway',field:[2000,1250],dogs:[[1000,560]],sheep:cluster(700,250,50,200,92),fences:[[0,620,900,620],[1100,620,2000,620]],rocks:[[1500,300,50],[500,950,45]],pen:{x:1740,y:990,w:220,h:220,gate:'left',gateWidth:140},par:{time:154,gold:110},limit:300},
+  {name:'Down the lane',tip:'Funnel the flock into the lane and walk it all the way down.',field:[1400,2400],dogs:[[700,1000]],sheep:cluster(700,330,50,170,93),fences:[[60,640,550,900],[1340,640,850,900],[550,900,550,2120],[850,900,850,2120]],rocks:[[300,250,45],[1100,420,50]],pen:{x:590,y:2150,w:220,h:220,gate:'top',gateWidth:140},par:{time:139,gold:99},limit:360},
+  {name:'The ford',tip:'Ewes with their lambs. Only the bridge crosses the river.',field:[2400,1400],dogs:[[1050,700]],sheep:[...cluster(500,700,30,150,94),...lambs(cluster(500,700,15,150,95))],water:[[1150,0,110,600],[1150,800,110,600]],bridges:[[1150,600,110,200]],rocks:[[800,1000,50]],bush:[[1700,400,45],[1900,1050,40]],pen:{x:2140,y:580,w:230,h:240,gate:'left',gateWidth:140},par:{time:669,gold:478},limit:840},
+  {name:'The gather',tip:'Five bunches on the hill. Gather them, then bring them home.',field:[2400,1500],dogs:[[900,1420],[1500,1420]],sheep:[...cluster(300,250,10,60,96),...cluster(1200,180,10,60,97),...cluster(2100,280,10,60,98),...cluster(450,900,10,60,99),...cluster(1950,950,10,60,100)],rocks:[[800,550,55],[1600,600,55]],bush:[[1200,700,45]],pen:{x:1090,y:1240,w:220,h:220,gate:'top',gateWidth:140},par:{time:364,gold:260},limit:450},
+  {name:'Shedding',tip:'Forty mixed. Bark to split the lambs off, then pen each kind.',field:[1800,1100],dogs:[[200,550],[1600,550]],sheep:[...cluster(900,550,24,110,101),...lambs(cluster(900,550,16,110,102))],pens:[{x:40,y:40,w:220,h:220,gate:'right',gateWidth:140,kind:EWE},{x:1540,y:840,w:220,h:220,gate:'left',gateWidth:140,kind:LAMB}],rocks:[[900,200,50],[900,900,50]],par:{time:498,gold:356},limit:620},
 ];
 
 // Levels grouped into farms, in play order. The numbers index LEVELS, which keeps its order so that
@@ -234,6 +244,7 @@ const FARMS=[
   {name:'Trial ground',levels:[23,24,26,27,29,30]},
   {name:'Wet ground',levels:[31,32,33,34]},
   {name:'Sorting day',levels:[19,25,28,35]},
+  {name:'Open hill',levels:[36,37,38,39,40,41,42]},
 ];
 const ORDER=FARMS.flatMap(farm=>farm.levels);
 
@@ -245,8 +256,8 @@ function penSide(pen,side){
 // the open part of the gate side, as a segment [x1,y1,x2,y2]
 function gateOpening(pen){
   const [a,b]=penSide(pen,pen.gate),len=Math.hypot(b[0]-a[0],b[1]-a[1]);
-  const ux=(b[0]-a[0])/len,uy=(b[1]-a[1])/len,start=(len-GATE_WIDTH)/2;
-  return [a[0]+ux*start,a[1]+uy*start,a[0]+ux*(start+GATE_WIDTH),a[1]+uy*(start+GATE_WIDTH)];
+  const width=pen.gateWidth||GATE_WIDTH,ux=(b[0]-a[0])/len,uy=(b[1]-a[1])/len,start=(len-width)/2;
+  return [a[0]+ux*start,a[1]+uy*start,a[0]+ux*(start+width),a[1]+uy*(start+width)];
 }
 // four walls, with the gate side split around the opening
 function penWalls(pen){
@@ -285,13 +296,16 @@ function makeWorld(level){
       bottom:[cx,P.y+P.h-30,cx,P.y+P.h+out],
       right:[P.x+P.w-30,cy,P.x+P.w+out,cy],
     }[P.gate];
-    return {...P,insideX,insideY,outsideX,outsideY,shut:false};
+    // the back of the pen, opposite the gate: penned sheep drift there and leave the gateway free
+    const [backX,backY]={left:[P.x+P.w-25,cy],top:[cx,P.y+P.h-25],bottom:[cx,P.y+25],right:[P.x+25,cy]}[P.gate];
+    return {...P,insideX,insideY,outsideX,outsideY,backX,backY,shut:false};
   });
   // terrain: water (sheep cannot enter, dogs swim slowly), mud (everyone slow), bushes (scared sheep hide in them)
   const water=level.water||[];
   const waterEdges=water.flatMap(([x,y,w,h])=>[[x,y,x+w,y],[x+w,y,x+w,y+h],[x,y+h,x+w,y+h],[x,y,x,y+h]]);
+  const [W,H]=level.field||[FIELD_W,FIELD_H];
   return {
-    level,t:0,penned:0,events:[],random:rng(7),
+    level,t:0,penned:0,events:[],random:rng(7),W,H,open:W>FIELD_W||H>FIELD_H,
     dogs,sheep,pens,
     walls:[...pens.flatMap(penWalls),...(level.fences||[])],
     rocks:level.rocks||[],water,waterEdges,mud:level.mud||[],bushes:level.bush||[],
@@ -316,8 +330,8 @@ function bark(world,dogIndex){
 // Push a dog or sheep out of anything solid: the field edge, water (sheep only), rocks, walls and closed gates.
 function collide(world,body,edge=SHEEP_EDGE){
   const r=bodyRadius(body);
-  body.x=clamp(body.x,edge,FIELD_W-edge);
-  body.y=clamp(body.y,edge,FIELD_H-edge);
+  body.x=clamp(body.x,edge,world.W-edge);
+  body.y=clamp(body.y,edge,world.H-edge);
   if(isSheep(body))for(const [x,y,w,h] of world.water){ // sheep do not swim: push out of the water the short way
     if(body.x>x-r&&body.x<x+w+r&&body.y>y-r&&body.y<y+h+r){
       const exits=[[body.x-(x-r),-1,0],[(x+w+r)-body.x,1,0],[body.y-(y-r),0,-1],[(y+h+r)-body.y,0,1]];
@@ -405,7 +419,10 @@ function senseFlock(world,s,acc){
   let count=0,cx=0,cy=0,vx=0,vy=0,maxFear=0;
   for(const o of world.sheep){
     if(o===s||o.penned!==s.penned)continue;
-    const ex=s.x-o.x,ey=s.y-o.y,dist=Math.hypot(ex,ey)||1;
+    const ex=s.x-o.x,ey=s.y-o.y;
+    if(ex>sight||ex<-sight||ey>sight||ey<-sight)continue; // out of sight: skip the square root (big flocks)
+    const dist=Math.sqrt(ex*ex+ey*ey)||1;
+    if(dist>=sight)continue;
     const space=s.kind&&o.kind?13:18;
     if(dist<space){acc.x+=ex/dist*500*(1-dist/space);acc.y+=ey/dist*500*(1-dist/space);}
     const mate=s.huddleTime||s.hideTime?o.kind===s.kind:true; // after a bark ewes bunch with ewes and lambs stick with lambs
@@ -417,7 +434,7 @@ function senseFlock(world,s,acc){
 // A slight pull toward mid-field, stronger the nearer a corner. Fades out by the sheep's own pen gate
 // so it never fights a drive into a pen against the edge.
 function centrePull(world,s){
-  const mx=(FIELD_W/2-s.x)/(FIELD_W/2),my=(FIELD_H/2-s.y)/(FIELD_H/2),off2=mx*mx+my*my,off=Math.sqrt(off2)||1;
+  const mx=(world.W/2-s.x)/(world.W/2),my=(world.H/2-s.y)/(world.H/2),off2=mx*mx+my*my,off=Math.sqrt(off2)||1;
   let nearGate=1;
   for(const P of world.pens)
     nearGate=Math.min(nearGate,Math.max(0,Math.hypot(P.outsideX-s.x,P.outsideY-s.y)-60)/140);
@@ -432,6 +449,22 @@ function flockVelocity(s,flock,dogs){
   const [hx,hy]=dropBackward(gx/gap*speed,gy/gap*speed,dogs.awayX,dogs.awayY);
   const align=.5*s.fear*loose;
   return [hx+flock.vx*align,hy+flock.vy*align];
+}
+
+// On an open field (bigger than the screen) a sheep that has lost the flock (nobody within LOST) walks back
+// to the nearest flockmate, never toward a dog. In a paddock the flock is always in sight.
+const LOST=150;
+function rejoinVelocity(world,s,dogs){
+  let mate=null,dist=REJOIN;
+  for(const o of world.sheep){
+    if(o===s||o.penned)continue;
+    const d=Math.hypot(o.x-s.x,o.y-s.y);
+    if(d<LOST)return [0,0];
+    if(d<dist){dist=d;mate=o;}
+  }
+  if(!mate)return [0,0];
+  const speed=(s.kind===LAMB?40:28)*(1-.6*s.panic);
+  return dropBackward((mate.x-s.x)/dist*speed,(mate.y-s.y)/dist*speed,dogs.awayX,dogs.awayY);
 }
 
 // After a bark a lamb trots to a spot just beyond the nearby ewes, on the far side from the barking dog.
@@ -453,14 +486,14 @@ function hideSpot(world,s){
     x=ex-uy*sign*(flockRadius+28)+ux*ahead;
     y=ey+ux*sign*(flockRadius+28)+uy*ahead;
   }
-  return [clamp(x,24,FIELD_W-24),clamp(y,24,FIELD_H-24)];
+  return [clamp(x,24,world.W-24),clamp(y,24,world.H-24)];
 }
 
 // Keep a little off walls, and turn a push into a wall into a slide along it, so nothing jams in a corner.
 function steerOffWalls(world,s,acc){
   let nx=0,ny=0;
   const repel=(dx,dy,dist,margin)=>{if(dist<margin){const k=1-Math.max(0,dist)/margin;nx+=dx*k;ny+=dy*k;}};
-  repel(1,0,s.x,38);repel(-1,0,FIELD_W-s.x,38);repel(0,1,s.y,38);repel(0,-1,FIELD_H-s.y,38);
+  repel(1,0,s.x,38);repel(-1,0,world.W-s.x,38);repel(0,1,s.y,38);repel(0,-1,world.H-s.y,38);
   for(const [x1,y1,x2,y2] of [...world.walls,...world.waterEdges]){
     const ex=x2-x1,ey=y2-y1,u=clamp(((s.x-x1)*ex+(s.y-y1)*ey)/(ex*ex+ey*ey),0,1);
     const dx=s.x-x1-ex*u,dy=s.y-y1-ey*u,d=Math.hypot(dx,dy)||1;
@@ -494,7 +527,7 @@ function keepOffDogs(world,s,dt){
     collide(world,s);
     if(Math.hypot(s.x-dog.x,s.y-dog.y)<reach-.5){ // pinned: slip sideways, toward open field
       let tx=-uy,ty=ux;
-      if(tx*(FIELD_W/2-s.x)+ty*(FIELD_H/2-s.y)<0){tx=-tx;ty=-ty;}
+      if(tx*(world.W/2-s.x)+ty*(world.H/2-s.y)<0){tx=-tx;ty=-ty;}
       s.x+=tx*140*dt;s.y+=ty*140*dt;s.vx=tx*110;s.vy=ty*110;s.fear=1;
       collide(world,s);
     }
@@ -552,6 +585,7 @@ function moveSheep(world,s,dt){
     wantX+=px;wantY+=py;
   }
   if(flock.count&&free){const [fx,fy]=flockVelocity(s,flock,dogs);wantX+=fx;wantY+=fy;} // 2
+  else if(free&&world.open){const [rx,ry]=rejoinVelocity(world,s,dogs);wantX+=rx;wantY+=ry;}      // 2, alone: back to the flock
   const spot=s.hideTime&&free?hideSpot(world,s):null;
   if(spot){ // a bark overrides everything: trot to the hiding spot behind the ewes
     const gx=spot[0]-s.x,gy=spot[1]-s.y,gap=Math.hypot(gx,gy)||1,speed=Math.min(HIDE_SPEED*boost,gap*4);
@@ -580,6 +614,10 @@ function moveSheep(world,s,dt){
     s.hopTime=.4;s.vx+=Math.cos(s.wanderAngle)*75;s.vy+=Math.sin(s.wanderAngle)*75;
   }
   if(free)steerOffWalls(world,s,acc);
+  else{ // penned: amble to the back of the pen, leaving the gateway to the ones still coming in
+    const dx=s.penned.backX-s.x,dy=s.penned.backY-s.y,dist=Math.hypot(dx,dy)||1;
+    if(dist>20){acc.x+=dx/dist*20;acc.y+=dy/dist*20;}
+  }
 
   // move
   s.vx+=acc.x*dt;s.vy+=acc.y*dt;
@@ -624,7 +662,10 @@ let timeBank=0;        // real time not yet simulated, in seconds
 let popups=[],barkRings=[],grass=[],dust=[];
 let endTime=0,closingUntil=0; // the winning time, and when the slow-motion gate close hands over to the results
 let gateShut=new Map();        // pen -> real time (s) its gate began to swing shut
-let pointerHeld=false,pointer=null,shift=false;
+let pointerHeld=false,pointer=null,pointerScreen=null,shift=false; // pointer: in the field, pointerScreen: on the canvas
+// The view: a big field is seen zoomed out a little, through a camera that follows the selected dog.
+let cam={x:0,y:0},zoom=1;
+const bigField=()=>world.open;
 const keys=new Set();
 
 let stars={};
@@ -756,7 +797,8 @@ function load(i){
   levelIndex=i;level=LEVELS[i];selected=0;
   const random=(()=>{let s=i*977+13;return()=>{s=(s*16807)%2147483647;return s/2147483647;};})();
   // tufts of grass, and now and then a flower
-  grass=Array.from({length:70},()=>[random()*FIELD_W,random()*FIELD_H,random()<.12?(random()<.5?'#f6f0d8':'#f2d36b'):null]);
+  const [W,H]=level.field||[FIELD_W,FIELD_H];
+  grass=Array.from({length:Math.round(70*W*H/(FIELD_W*FIELD_H))},()=>[random()*W,random()*H,random()<.12?(random()<.5?'#f6f0d8':'#f2d36b'):null]);
   const mine=myGhosts[i];
   setGhost('You',mine?.time,mine?.dogs);
   reset();
@@ -766,6 +808,7 @@ function load(i){
 }
 function reset(){
   world=makeWorld(level);mode='ready';timeBank=0;tutorialStep=0;popups=[];dust=[];pointerHeld=false;gateShut=new Map();
+  zoom=bigField()?.8:1;followCamera(1,true);
   run=world.dogs.map(()=>[]);recordRun();
   $('#ov').hidden=true;
 }
@@ -864,10 +907,13 @@ $('#boardOpen').onclick=openBoard;
 $('#boardForm').onsubmit=sendScore;
 
 /* ---------- controls: hold and drag to run the selected dog, tap a dog to switch ---------- */
-function toField(e){
-  const r=canvas.getBoundingClientRect();
-  return [clamp((e.clientX-r.left)/r.width*FIELD_W,DOG_EDGE,FIELD_W-DOG_EDGE),
-          clamp((e.clientY-r.top)/r.height*FIELD_H,DOG_EDGE,FIELD_H-DOG_EDGE)];
+const toScreen=e=>{const r=canvas.getBoundingClientRect();return [(e.clientX-r.left)/r.width*FIELD_W,(e.clientY-r.top)/r.height*FIELD_H];};
+const toField=([sx,sy])=>[clamp(cam.x+sx/zoom,DOG_EDGE,world.W-DOG_EDGE),clamp(cam.y+sy/zoom,DOG_EDGE,world.H-DOG_EDGE)];
+// Centre the view on the selected dog, easing after it (snap: jump there), never past the field edge.
+function followCamera(dt,snap){
+  const dog=world.dogs[selected],k=snap?1:1-Math.exp(-5*dt);
+  const tx=clamp(dog.x-FIELD_W/zoom/2,0,world.W-FIELD_W/zoom),ty=clamp(dog.y-FIELD_H/zoom/2,0,world.H-FIELD_H/zoom);
+  cam.x+=(tx-cam.x)*k;cam.y+=(ty-cam.y)*k;
 }
 const playing=()=>mode==='ready'||mode==='play';
 const nextDog=()=>pickDog((selected+1)%level.dogs.length);
@@ -875,14 +921,16 @@ canvas.addEventListener('pointerdown',e=>{
   audioCtx();
   if(mode==='paused'&&e.button!==2){pause(false);return;}
   if(e.button===2||!playing())return; // right button: next dog, see contextmenu
-  const p=toField(e);
+  const screen=toScreen(e),sent=minimapPoint(screen);
+  if(sent){world.dogs[selected].send=sent;start();return;} // a tap on the map sends the dog there on its own
+  const p=toField(screen);
   let hit=-1,best=30;
   world.dogs.forEach((d,i)=>{const dist=Math.hypot(d.x-p[0],d.y-p[1]);if(dist<best){best=dist;hit=i;}});
   if(hit>=0)pickDog(hit);
-  pointerHeld=true;pointer=p;start();
+  pointerHeld=true;pointerScreen=screen;pointer=p;start();
   canvas.setPointerCapture(e.pointerId);
 });
-canvas.addEventListener('pointermove',e=>{if(pointerHeld)pointer=toField(e);});
+canvas.addEventListener('pointermove',e=>{if(pointerHeld)pointerScreen=toScreen(e);});
 const release=()=>{pointerHeld=false;};
 canvas.addEventListener('pointerup',release);
 canvas.addEventListener('pointercancel',release);
@@ -923,20 +971,25 @@ $('#ovRetry').onclick=reset;
 $('#ovNext').onclick=()=>load(nextLevel());
 
 // Pointer: the dog walks when you lead it closely and sprints when the pointer is far ahead.
-// Keys: walk, Shift sprints. Only the selected dog moves; the others stand still as blockers.
+// Keys: walk, Shift sprints. Only the selected dog takes these; the others stand still as blockers,
+// unless the map sent one somewhere: it runs there on its own, until it arrives or you steer it.
 function steerDogs(){
+  if(pointerHeld&&pointerScreen)pointer=toField(pointerScreen); // the view moves under a still pointer
   world.dogs.forEach((dog,i)=>{
     dog.driving=false;
-    if(i!==selected||mode!=='play')return;
-    if(pointerHeld&&pointer){
-      Object.assign(dog,{driving:true,targetX:pointer[0],targetY:pointer[1],maxSpeed:DOG_MAX,gain:2.6});
-      return;
-    }
+    if(mode!=='play')return;
     let x=0,y=0;
-    for(const k of keys)if(MOVE_KEYS[k]){x+=MOVE_KEYS[k][0];y+=MOVE_KEYS[k][1];}
-    if(x||y){
+    if(i===selected)for(const k of keys)if(MOVE_KEYS[k]){x+=MOVE_KEYS[k][0];y+=MOVE_KEYS[k][1];}
+    const steered=i===selected&&(pointerHeld&&pointer||x||y);
+    if(steered)dog.send=null;
+    if(i===selected&&pointerHeld&&pointer){
+      Object.assign(dog,{driving:true,targetX:pointer[0],targetY:pointer[1],maxSpeed:DOG_MAX,gain:2.6});
+    }else if(x||y){
       const len=Math.hypot(x,y);
       Object.assign(dog,{driving:true,targetX:dog.x+x/len*80,targetY:dog.y+y/len*80,maxSpeed:shift?DOG_MAX:DOG_WALK,gain:6});
+    }else if(dog.send){
+      if(Math.hypot(dog.send[0]-dog.x,dog.send[1]-dog.y)<12){dog.send=null;return;}
+      Object.assign(dog,{driving:true,targetX:dog.send[0],targetY:dog.send[1],maxSpeed:DOG_MAX,gain:2.6});
     }
   });
 }
@@ -987,8 +1040,8 @@ function drawDog(d,colour,t){
 }
 
 function drawGround(now){
-  ctx.fillStyle='#86a663';ctx.fillRect(0,0,FIELD_W,FIELD_H);
-  ctx.fillStyle='#7f9e5d';for(let x=0;x<FIELD_W;x+=80)ctx.fillRect(x,0,40,FIELD_H); // mown stripes
+  ctx.fillStyle='#86a663';ctx.fillRect(0,0,world.W,world.H);
+  ctx.fillStyle='#7f9e5d';for(let x=0;x<world.W;x+=80)ctx.fillRect(x,0,40,world.H); // mown stripes
   for(const [x,y,flower] of grass){
     if(flower){ctx.fillStyle=flower;circle(x,y,2.2);continue;}
     ctx.strokeStyle='#6d8c4e';ctx.lineWidth=1.5;
@@ -1096,13 +1149,46 @@ function drawGhost(t){
   if(shown>0)label(`${shown>=ghost.time?'✓ ':''}${ghost.name} ${ghost.time.toFixed(1)} s`,top.x,top.y-30,13);
   ctx.globalAlpha=1;
 }
+// a dashed line from a dog to where it is heading: the held pointer, or a spot the map sent it to
 function drawPointerLine(){
-  if(!pointerHeld||!pointer||mode==='done')return;
-  const dog=world.dogs[selected];
-  ctx.strokeStyle=DOG_COLOURS[selected];ctx.globalAlpha=.6;ctx.lineWidth=2;ctx.setLineDash([6,6]);
-  ctx.beginPath();ctx.moveTo(dog.x,dog.y);ctx.lineTo(...pointer);ctx.stroke();
-  ctx.setLineDash([]);ctx.globalAlpha=1;
-  ctx.lineWidth=3;ctx.beginPath();ctx.arc(pointer[0],pointer[1],9,0,7);ctx.stroke();
+  if(mode==='done')return;
+  world.dogs.forEach((dog,i)=>{
+    const to=i===selected&&pointerHeld&&pointer?pointer:dog.send;
+    if(!to)return;
+    ctx.strokeStyle=DOG_COLOURS[i];ctx.globalAlpha=.6;ctx.lineWidth=2;ctx.setLineDash([6,6]);
+    ctx.beginPath();ctx.moveTo(dog.x,dog.y);ctx.lineTo(...to);ctx.stroke();
+    ctx.setLineDash([]);ctx.globalAlpha=1;
+    ctx.lineWidth=3;ctx.beginPath();ctx.arc(to[0],to[1],9,0,7);ctx.stroke();
+  });
+}
+// On a big field, a map of the whole field in the corner. Tap it to send the selected dog there.
+function minimapRect(){
+  const scale=Math.min(180/world.W,130/world.H),w=world.W*scale,h=world.H*scale; // fits a 180 x 130 corner
+  return {x:FIELD_W-w-10,y:FIELD_H-h-10,w,h,scale};
+}
+function minimapPoint([sx,sy]){
+  if(!bigField())return null;
+  const m=minimapRect();
+  if(sx<m.x||sx>m.x+m.w||sy<m.y||sy>m.y+m.h)return null;
+  return [clamp((sx-m.x)/m.scale,DOG_EDGE,world.W-DOG_EDGE),clamp((sy-m.y)/m.scale,DOG_EDGE,world.H-DOG_EDGE)];
+}
+function drawMinimap(){
+  if(!bigField())return;
+  const m=minimapRect(),k=m.scale,X=x=>m.x+x*k,Y=y=>m.y+y*k;
+  ctx.fillStyle='rgba(18,23,16,.55)';ctx.beginPath();ctx.roundRect(m.x-4,m.y-4,m.w+8,m.h+8,8);ctx.fill();
+  ctx.fillStyle='#6f8c52';ctx.fillRect(m.x,m.y,m.w,m.h);
+  ctx.fillStyle='#7a5f3c';for(const [x,y,w,h] of world.mud)ctx.fillRect(X(x),Y(y),w*k,h*k);
+  ctx.fillStyle='#4f8fb8';for(const [x,y,w,h] of world.water)ctx.fillRect(X(x),Y(y),w*k,h*k);
+  ctx.fillStyle='#9b6b3e';for(const [x,y,w,h] of (level.bridges||[]))ctx.fillRect(X(x),Y(y),w*k,h*k);
+  ctx.fillStyle='#3f6b2c';for(const [x,y,r] of world.bushes)circle(X(x),Y(y),Math.max(1.5,r*k));
+  ctx.fillStyle='#a6aaa0';for(const [x,y,r] of world.rocks)circle(X(x),Y(y),Math.max(1.5,r*k));
+  ctx.fillStyle='#d8c27e';for(const P of world.pens)ctx.fillRect(X(P.x),Y(P.y),P.w*k,P.h*k);
+  ctx.strokeStyle='#5b3a1f';ctx.lineWidth=1.5;
+  for(const [x1,y1,x2,y2] of world.walls){ctx.beginPath();ctx.moveTo(X(x1),Y(y1));ctx.lineTo(X(x2),Y(y2));ctx.stroke();}
+  for(const s of world.sheep){ctx.fillStyle=s.kind===LAMB?'#fff6d0':'#ffffff';ctx.fillRect(X(s.x)-1,Y(s.y)-1,2,2);}
+  world.dogs.forEach((dog,i)=>{ctx.fillStyle=DOG_COLOURS[i];circle(X(dog.x),Y(dog.y),i===selected?3.5:2.5);});
+  ctx.strokeStyle='rgba(255,255,255,.8)';ctx.lineWidth=1;
+  ctx.strokeRect(X(cam.x),Y(cam.y),FIELD_W/zoom*k,FIELD_H/zoom*k);
 }
 function drawBushes(){ // drawn over the sheep, so hidden sheep are hard to see
   const blobs=[[0,0,1,'#3f6b2c'],[-.45,-.3,.62,'#4c7d35'],[.45,-.25,.6,'#4c7d35'],[-.2,.4,.6,'#46752f'],[.35,.35,.55,'#46752f']];
@@ -1170,31 +1256,34 @@ const TUTORIALS={
 };
 let tutorialStep=0;
 const tutorial=()=>(mode==='ready'||mode==='play')&&world.penned<world.sheep.length?TUTORIALS[level.name]:undefined;
-function drawTutorial(steps,t){
+function lesson(){ // the tutorial prompt showing now, if any
+  const steps=tutorial();
+  if(!steps)return null;
   while(tutorialStep<steps.length-1&&steps[tutorialStep].done())tutorialStep++;
-  const {text,target}=steps[tutorialStep],{x,y}=target(),pulse=(t*1.2)%1;
+  return steps[tutorialStep];
+}
+function drawLessonRing(step,t){
+  const {x,y}=step.target(),pulse=(t*1.2)%1;
   ctx.strokeStyle=`rgba(255,255,255,${.85*(1-pulse)})`;ctx.lineWidth=3;
   ctx.beginPath();ctx.arc(x,y,14+22*pulse,0,7);ctx.stroke();
-  label(text,FIELD_W/2,34);
 }
-function drawHint(t){
+function drawHint(step){
   if(mode==='paused'){
     ctx.fillStyle='rgba(18,23,16,.45)';ctx.fillRect(0,0,FIELD_W,FIELD_H);
     label('Paused',FIELD_W/2,FIELD_H/2-14,40);label('P, Esc or tap to go on',FIELD_W/2,FIELD_H/2+24,18);
     return;
   }
-  const steps=tutorial();
-  if(steps)return drawTutorial(steps,t);
+  if(step)return label(step.text,FIELD_W/2,34);
   if(mode!=='ready')return;
   const text=level.tip?level.tip
     :level.dogs.length>1?'Drag close to walk, far to sprint. Tab, right-click or tap a dog to switch.'
     :'Drag close to the dog to walk, far ahead to sprint';
-  const penAtTop=world.pens.some(P=>P.y<60&&P.x<520&&P.x+P.w>280); // then show the hint at the bottom
+  const penAtTop=world.pens.some(P=>(P.y-cam.y)*zoom<60&&(P.x-cam.x)*zoom<520&&(P.x+P.w-cam.x)*zoom>280); // then show the hint at the bottom
   label(text,FIELD_W/2,penAtTop?FIELD_H-30:34);
 }
 function render(now){
-  const t=now/1000;
-  ctx.setTransform(DPR,0,0,DPR,0,0);
+  const t=now/1000,step=lesson();
+  ctx.setTransform(DPR*zoom,0,0,DPR*zoom,-cam.x*DPR*zoom,-cam.y*DPR*zoom); // the field, as the camera sees it
   drawGround(now);
   drawPens();
   drawRocks();
@@ -1210,7 +1299,10 @@ function render(now){
   drawBarkRings(t);
   drawDogs(t);
   drawPopups(t);
-  drawHint(t);
+  if(step)drawLessonRing(step,t);
+  ctx.setTransform(DPR,0,0,DPR,0,0); // the screen
+  drawMinimap();
+  drawHint(step);
 }
 
 /* ---------- main loop ---------- */
@@ -1241,6 +1333,7 @@ function frame(now){
     if(mode==='closing'&&t>=closingUntil)finish(true);
   }
   if(mode==='ready'||mode==='play')idleBleat(t);
+  if(mode!=='paused')followCamera(dt);
   render(now);
   const cooldown=Math.ceil(world.dogs[selected].barkCooldown);
   if(shown.cooldown!==cooldown){shown.cooldown=cooldown;$('#barkCd').textContent=cooldown>0?cooldown+'s':'';$('#bBark').disabled=cooldown>0;}
