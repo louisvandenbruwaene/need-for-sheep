@@ -90,7 +90,7 @@ function play(level,{sprintFrom,behind,useBark}){
   // where to stand to push (x,y) away from direction (ux,uy): R behind it, or if a wall, rock, water or the
   // field edge is in the way, the nearest open spot round to either side (a dog fits closer to the edge than
   // a sheep, which is how it gets a sheep out of a corner)
-  const reach=field(dogCost,world.dogs[0].x,world.dogs[0].y); // ground a dog can get to (not behind a corner panel)
+  const reach=field(dogCost,world.dogs[0].x,world.dogs[0].y); // ground a dog can get to
   const standBehind=(x,y,ux,uy,R)=>{
     for(const turn of [0,.4,-.4,.8,-.8,1.2,-1.2,1.6,-1.6]){
       const c=Math.cos(turn),s=Math.sin(turn),px=x+(ux*c-uy*s)*R,py=y+(ux*s+uy*c)*R;

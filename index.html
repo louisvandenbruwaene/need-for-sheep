@@ -166,6 +166,9 @@ const isSheep=body=>body.kind!==undefined;
 const fitsPen=(P,s)=>P.kind===undefined||P.kind===s.kind;
 const insidePen=(P,s,margin=9)=>s.x>P.x+margin&&s.x<P.x+P.w-margin&&s.y>P.y+margin&&s.y<P.y+P.h-margin;
 const bodyRadius=body=>body.kind?6:8;
+// Sheep may squash together but not through each other: each has a solid core, half its drawn wool's radius,
+// and two cores never overlap.
+const coreRadius=s=>s.kind===LAMB?4:6;
 
 // Remove any part of the vector (x,y) that points against the unit direction (ux,uy).
 // Used so that flocking and the pull to mid-field never walk a sheep toward a dog.
@@ -344,38 +347,6 @@ function penWalls(pen){
   return walls;
 }
 
-// A right-angled pocket, where a pen, a fence or water meets the field edge or two field edges meet, traps a
-// sheep pushed into it. Each gets a short diagonal panel across it: stone in the field's corners, fence
-// elsewhere, and never across a gate. Returns [{wall:[x1,y1,x2,y2],stone}].
-const CHAMFER=80;
-function chamfers(pens,fences,water,W,H){
-  const out=[],add=(x1,y1,x2,y2,stone)=>out.push({wall:[x1,y1,x2,y2],stone});
-  const covers=(x,y)=>pens.some(P=>x>=P.x-CHAMFER&&x<=P.x+P.w+CHAMFER&&y>=P.y-CHAMFER&&y<=P.y+P.h+CHAMFER)
-    ||water.some(([wx,wy,ww,wh])=>x>=wx-CHAMFER&&x<=wx+ww+CHAMFER&&y>=wy-CHAMFER&&y<=wy+wh+CHAMFER);
-  for(const [cx,cy,dx,dy] of [[0,0,1,1],[W,0,-1,1],[0,H,1,-1],[W,H,-1,-1]])
-    if(!covers(cx,cy))add(cx+dx*CHAMFER,cy,cx,cy+dy*CHAMFER,true);
-  // blocks against an edge: pens (their wall stops short of the gate) and water
-  const blocks=[...pens.map(P=>({...P,gw:P.gateWidth||GATE_WIDTH})),...water.map(([x,y,w,h])=>({x,y,w,h}))];
-  for(const B of blocks){
-    const wall=side=>{const len=side==='left'||side==='right'?B.h:B.w;return B.gate===side?(len-B.gw)/2-10:len;}; // solid wall from the corner
-    const c=side=>Math.min(CHAMFER,wall(side));
-    const pocket=(side,x1,y1,x2,y2)=>{if(c(side)>=30)add(x1,y1,x2,y2,false);};
-    const L=B.x,R=B.x+B.w,T=B.y,Bo=B.y+B.h;
-    if(Bo>=H-.5){if(L>.5)pocket('left',L,H-c('left'),L-c('left'),H);if(R<W-.5)pocket('right',R,H-c('right'),R+c('right'),H);}
-    if(T<=.5){if(L>.5)pocket('left',L,c('left'),L-c('left'),0);if(R<W-.5)pocket('right',R,c('right'),R+c('right'),0);}
-    if(L<=.5){if(T>.5)pocket('top',c('top'),T,0,T-c('top'));if(Bo<H-.5)pocket('bottom',c('bottom'),Bo,0,Bo+c('bottom'));}
-    if(R>=W-.5){if(T>.5)pocket('top',W-c('top'),T,W,T-c('top'));if(Bo<H-.5)pocket('bottom',W-c('bottom'),Bo,W,Bo+c('bottom'));}
-  }
-  // fences running square into the edge: a panel on each side of where they meet it
-  for(const [x1,y1,x2,y2] of fences)for(const [x,y,ox,oy] of [[x1,y1,x2,y2],[x2,y2,x1,y1]]){
-    const len=Math.hypot(ox-x,oy-y),c=Math.min(CHAMFER*.75,len-10);
-    if(c<30)continue;
-    if((y<=.5||y>=H-.5)&&Math.abs(ox-x)<1){const dy=y<=.5?1:-1;add(x,y+dy*c,x-c,y);add(x,y+dy*c,x+c,y);}
-    else if((x<=.5||x>=W-.5)&&Math.abs(oy-y)<1){const dx=x<=.5?1:-1;add(x+dx*c,y,x,y-c);add(x+dx*c,y,x,y+c);}
-  }
-  return out;
-}
-
 // Trial levels: level.course = [{a:[x,y],b:[x,y]}, ...], pairs of hurdles; the flock goes between a and b.
 // A pair is done once COURSE_SHARE of the flock has crossed between them, and the pens stay locked
 // until every pair is done. Each hurdle stands across the line a-b, HURDLE long.
@@ -447,13 +418,12 @@ function makeWorld(level){
   const water=level.water||[];
   const waterEdges=water.flatMap(([x,y,w,h])=>[[x,y,x+w,y],[x+w,y,x+w,y+h],[x,y+h,x+w,y+h],[x,y,x,y+h]]);
   const [W,H]=level.field||[FIELD_W,FIELD_H];
-  const panels=chamfers(pens,level.fences||[],water,W,H);
   const course=makeCourse(level,sheep),hurdles=courseHurdles(level.course||[]);
   const locks=course.length?pens.map(P=>{P.locked=true;return gateOpening(P);}):[];
   return {
     level,t:0,penned:0,events:[],random:rng(7),W,H,open:W>FIELD_W||H>FIELD_H,
-    dogs,sheep,pens,panels,
-    walls:[...pens.flatMap(penWalls),...(level.fences||[]),...panels.map(p=>p.wall),...hurdles,...locks],
+    dogs,sheep,pens,
+    walls:[...pens.flatMap(penWalls),...(level.fences||[]),...hurdles,...locks],
     course,hurdles,locks,
     rocks:level.rocks||[],water,waterEdges,mud:level.mud||[],bushes:level.bush||[],
   };
@@ -857,6 +827,32 @@ function scareWolf(world){
   w.state='flee';world.events.push({type:'wolfFlee'});
 }
 
+// After everyone has moved, push apart any two sheep whose cores overlap. A penned sheep does not give way
+// to a free one (the free one is outside, or still coming through the gate), and nobody is pushed into a wall.
+function separateSheep(world){
+  world.sheep.forEach((s,i)=>{s.n=i;});
+  for(let pass=0;pass<2;pass++)for(const s of world.sheep){ // twice: a push can shove a sheep into a third
+    const rs=coreRadius(s);
+    for(const o of nearbySheep(world,s)){
+      if(o.n<=s.n)continue;
+      const ex=o.x-s.x,ey=o.y-s.y,reach=rs+coreRadius(o);
+      if(ex>reach||ex<-reach||ey>reach||ey<-reach)continue;
+      const d2=ex*ex+ey*ey;
+      if(d2>=reach*reach)continue;
+      const d=Math.sqrt(d2),ux=d>1e-3?ex/d:Math.cos(s.n),uy=d>1e-3?ey/d:Math.sin(s.n),gap=reach-d;
+      const ks=s.penned&&!o.penned?0:o.penned&&!s.penned?1:.5; // share of the push s takes
+      s.x-=ux*gap*ks;s.y-=uy*gap*ks;o.x+=ux*gap*(1-ks);o.y+=uy*gap*(1-ks);
+      s.squashed=o.squashed=true;
+    }
+  }
+  for(const s of world.sheep){
+    if(!s.squashed)continue;
+    s.squashed=false;
+    collide(world,s);
+    if(s.penned){const P=s.penned;s.x=clamp(s.x,P.x+10,P.x+P.w-10);s.y=clamp(s.y,P.y+10,P.y+P.h-10);}
+  }
+}
+
 function step(world,dt){
   world.t+=dt;
   thunder(world);
@@ -865,6 +861,7 @@ function step(world,dt){
   buildGrid(world);
   for(const dog of world.dogs)moveDog(world,dog,dt);
   for(const s of world.sheep)moveSheep(world,s,dt);
+  separateSheep(world);
   checkCourse(world);
   shutGates(world);
 }
@@ -1072,7 +1069,7 @@ function buildDogs(){
 }
 function pickDog(i){if(i===selected||i>=level.dogs.length)return;selected=i;buildDogs();}
 function load(i){
-  levelIndex=i;level=LEVELS[i];selected=0;
+  levelIndex=i;level=LEVELS[i];selected=0;mapMovedAt=-9;
   shownFarm=FARMS.findIndex(f=>f.levels.includes(i));
   const random=(()=>{let s=i*977+13;return()=>{s=(s*16807)%2147483647;return s/2147483647;};})();
   // tufts of grass, and now and then a flower
@@ -1580,12 +1577,6 @@ function drawFieldWall(view){
   ctx.strokeStyle='rgba(30,40,20,.3)';ctx.lineWidth=12;ctx.strokeRect(-4,-3,world.W+10,world.H+10);
   ctx.strokeStyle='#8f8d80';ctx.lineWidth=10;ctx.strokeRect(-5,-5,world.W+10,world.H+10);
   ctx.strokeStyle='#a9a798';ctx.lineWidth=6;ctx.setLineDash([9,4]);ctx.strokeRect(-5,-5,world.W+10,world.H+10);ctx.setLineDash([]);
-  for(const {wall:[x1,y1,x2,y2],stone} of world.panels)if(stone){ // the wall cuts across the field's corners
-    ctx.lineCap='round';
-    ctx.strokeStyle='rgba(30,40,20,.3)';ctx.lineWidth=12;ctx.beginPath();ctx.moveTo(x1+1,y1+2);ctx.lineTo(x2+1,y2+2);ctx.stroke();
-    ctx.strokeStyle='#8f8d80';ctx.lineWidth=10;ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();
-    ctx.strokeStyle='#a9a798';ctx.lineWidth=6;ctx.setLineDash([9,4]);ctx.stroke();ctx.setLineDash([]);
-  }
   for(const [x,y,r] of trees){
     if(!inView(x,y,view))continue;
     ctx.fillStyle='rgba(20,35,15,.3)';circle(x+r*.35,y+r*.45,r);
@@ -1945,10 +1936,35 @@ function drawPointerLine(){
     ctx.lineWidth=3;ctx.beginPath();ctx.arc(to[0],to[1],9,0,7);ctx.stroke();
   });
 }
-// On a big field, a map of the whole field in the corner. Tap it to send the selected dog there.
-function minimapRect(){
+// On a big field, a map of the whole field in a corner of the screen. Tap it to send the selected dog there.
+// It sits in whichever corner keeps out of the way of the pens, the flock and the dogs, and only moves when
+// what it covers matters and another corner is clearer (and not more than once every MAP_HOLD seconds).
+const MAP_HOLD=1.5;
+let mapCorner=3,mapMovedAt=-9; // 0 top left, 1 top right, 2 bottom left, 3 bottom right
+function minimapRect(corner=mapCorner){
   const scale=Math.min(180/world.W,130/world.H),w=world.W*scale,h=world.H*scale; // fits a 180 x 130 corner
-  return {x:FIELD_W-w-10,y:FIELD_H-h-10,w,h,scale};
+  return {x:corner%2?FIELD_W-w-10:10,y:corner>=2?FIELD_H-h-10:10,w,h,scale};
+}
+// how much the map would hide in that corner: a pen or a dog counts for a lot, each sheep for one
+function mapCovers(corner){
+  const m=minimapRect(corner),pad=24,x0=m.x-pad,y0=m.y-pad,x1=m.x+m.w+pad,y1=m.y+m.h+pad;
+  const under=(x,y)=>{const [sx,sy]=toScreenXY(x,y);return sx>x0&&sx<x1&&sy>y0&&sy<y1;};
+  let cost=0;
+  for(const P of world.pens){
+    const [ax,ay]=toScreenXY(P.x-60,P.y-60),[bx,by]=toScreenXY(P.x+P.w+60,P.y+P.h+60); // the pen and its approach
+    if(ax<x1&&bx>x0&&ay<y1&&by>y0)cost+=100;
+  }
+  for(const dog of world.dogs)if(under(dog.x,dog.y))cost+=50;
+  for(const s of world.sheep)if(!s.penned&&under(s.x,s.y))cost++;
+  return cost;
+}
+function placeMinimap(t){
+  if(!bigField()||t-mapMovedAt<MAP_HOLD)return;
+  const here=mapCovers(mapCorner);
+  if(!here)return;
+  let best=mapCorner,bestCost=here;
+  for(const c of [3,2,1,0]){const cost=mapCovers(c);if(cost<bestCost){best=c;bestCost=cost;}}
+  if(best!==mapCorner){mapCorner=best;mapMovedAt=t;}
 }
 function minimapPoint([sx,sy]){
   if(!bigField())return null;
@@ -1958,6 +1974,7 @@ function minimapPoint([sx,sy]){
 }
 function drawMinimap(){
   if(!bigField())return;
+  placeMinimap(nowS());
   const m=minimapRect(),k=m.scale,X=x=>m.x+x*k,Y=y=>m.y+y*k;
   ctx.fillStyle='rgba(18,23,16,.55)';ctx.beginPath();ctx.roundRect(m.x-4,m.y-4,m.w+8,m.h+8,8);ctx.fill();
   ctx.fillStyle={snow:'#c9d6e0',night:'#2c3a3a',fog:'#a9b4ad'}[level.weather]||'#6f8c52';ctx.fillRect(m.x,m.y,m.w,m.h);
@@ -2146,8 +2163,8 @@ function render(now){
   drawPens();
   drawRocks();
   const shut=world.pens.filter(P=>P.shut).length; // a shut gate is the last wall added, drawn as leaves instead
-  // drawn their own way: corner panels are part of the stone wall, hurdles and locked gates below
-  const own=new Set([...world.panels.filter(p=>p.stone).map(p=>p.wall),...world.hurdles,...world.locks]);
+  // drawn their own way: hurdles and locked gates below
+  const own=new Set([...world.hurdles,...world.locks]);
   for(const wall of world.walls.slice(0,world.walls.length-shut))if(!own.has(wall))drawFence(...wall);
   drawCourse(t);
   drawGates(t);
