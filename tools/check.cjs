@@ -3,7 +3,6 @@
 //    rock, another pen) is either shut (at most 2 px, nothing fits) or wide open (at least OPEN px, room for a flock to flow round)
 //  - in front of a gate: OPEN px of clear ground
 //  - every sheep and dog starts on open ground inside the field
-// (Right-angled pockets against the field edge get diagonal panels from the game itself: see chamfers().)
 // Usage: node tools/check.cjs        (prints problems, exits 1 if there are any)
 const fs=require('fs'),path=require('path'),vm=require('vm');
 const html=fs.readFileSync(path.join(__dirname,'..','index.html'),'utf8');
@@ -17,8 +16,7 @@ const inRect=(rects,x,y)=>rects.some(([rx,ry,w,h])=>x>rx&&x<rx+w&&y>ry&&y<ry+h);
 
 // how far a point can walk from (x,y) along (nx,ny) before it meets something solid, up to OPEN
 function clearance(world,P,x,y,nx,ny){
-  const panels=new Set(world.panels.map(p=>p.wall)); // the corner panels are the cure for gaps, not a gap
-  const others=world.walls.filter(w=>!isOwnWall(P,w)&&!panels.has(w));
+  const others=world.walls.filter(w=>!isOwnWall(P,w));
   for(let d=0;d<=OPEN;d++){
     const px=x+nx*d,py=y+ny*d;
     if(px<=0||py<=0||px>=world.W||py>=world.H)return d;
