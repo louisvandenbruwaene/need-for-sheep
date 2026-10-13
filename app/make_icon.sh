@@ -14,3 +14,5 @@ iconutil -c icns "$set" -o icon.icns
 cp "$tmp/icon.png" icon.png
 rm -rf "$tmp"
 echo "icon: $PWD/icon.icns"
+# favicon / home-screen icon for the web page: the tile without its margin
+sips -c 824 824 icon.png --out favicon.png >/dev/null && sips -z 180 180 favicon.png >/dev/null
