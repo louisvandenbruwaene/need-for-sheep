@@ -24,10 +24,10 @@ Sorting pens are labelled EWES or LAMBS. They take any sheep but only count thei
 
 ```
 ./app/install_app.sh   # puts Need for Sheep in /Applications
-./app/make_icon.sh     # only needed after editing app/icon.html
+./app/make_icon.sh     # only needed after editing app/icon.html (also writes the web favicon)
 ```
 
-The app opens the game in its own Brave window. The folder path is baked in, so re-run `install_app.sh` if this folder moves.
+The icon is a PixelLab mascot (`app/mascot.png`: a grinning collie with an unimpressed sheep on its head) on a sunburst tile. The app opens the game in its own Brave window. The folder path is baked in, so re-run `install_app.sh` if this folder moves.
 
 ## Online leaderboard
 
