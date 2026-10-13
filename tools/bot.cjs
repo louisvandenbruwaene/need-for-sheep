@@ -57,15 +57,43 @@ function downhill(d,x,y){
 function play(level,{sprintFrom,behind}){
   const world=makeWorld(level);
   CELL=world.W>800?20:10;GW=Math.ceil(world.W/CELL);GH=Math.ceil(world.H/CELL);
-  const stuckAfter=35*Math.max(1,(world.W+world.H)/1300),sheepCost=costGrid(world,false),dogCost=costGrid(world,true);
+  const stuckAfter=35*Math.max(1,(world.W+world.H)/1300)*(+process.env.BOT_PATIENCE||1),sheepCost=costGrid(world,false),dogCost=costGrid(world,true);
   const penFields=world.pens.map(P=>field(sheepCost,P.x+P.w/2,P.y+P.h/2));
   const fits=(P,s)=>P.kind===undefined||P.kind===s.kind;
   const goalField=s=>{let best=null,bd=Infinity;world.pens.forEach((P,k)=>{if(!fits(P,s)||P.shut)return;const v=penFields[k][cellOf(s.x,s.y)];if(v<bd){bd=v;best=penFields[k];}});return best||penFields[0];};
-  let active=0,dogField=null,lastPlan=-1,limit=level.limit||LIMIT,target=[0,0],progressAt=0,lastPenned=0;
+  // where to stand to push (x,y) away from direction (ux,uy): R behind it, or if a wall, rock, water or the
+  // field edge is in the way, the nearest open spot round to either side (a dog fits closer to the edge than
+  // a sheep, which is how it gets a sheep out of a corner)
+  const standBehind=(x,y,ux,uy,R)=>{
+    for(const turn of [0,.4,-.4,.8,-.8,1.2,-1.2,1.6,-1.6]){
+      const c=Math.cos(turn),s=Math.sin(turn),px=x+(ux*c-uy*s)*R,py=y+(ux*s+uy*c)*R;
+      if(px>7&&py>7&&px<world.W-7&&py<world.H-7&&dogCost[cellOf(px,py)]<2)return [px,py];
+    }
+    return [x+ux*R,y+uy*R];
+  };
+  let active=0,dogField=null,lastPlan=-1,limit=process.env.BOT_UNLIMITED?3600:level.limit||LIMIT,target=[0,0],progressAt=0,lastPenned=0;
+  // a level with a blocker spot: first run dog 2 there and leave it standing, then herd with dog 1 alone
+  const parkAt=level.blocker,parkField=parkAt&&field(dogCost,parkAt[0],parkAt[1]);
+  let parking=!!parkAt;
   while(world.t<limit){
+    if(parking){
+      const d=world.dogs[1],left=Math.hypot(parkAt[0]-d.x,parkAt[1]-d.y);
+      if(left<10){parking=false;d.driving=false;continue;}
+      const [ux,uy]=left<30?[(parkAt[0]-d.x)/left,(parkAt[1]-d.y)/left]:downhill(parkField,d.x,d.y);
+      Object.assign(d,{driving:true,targetX:d.x+ux*Math.min(60,left),targetY:d.y+uy*Math.min(60,left),maxSpeed:DOG_MAX,gain:6});
+      step(world,DT);progressAt=world.t;
+      continue;
+    }
     if(world.penned>lastPenned){lastPenned=world.penned;progressAt=world.t;}
     if(world.t-progressAt>stuckAfter)break; // stuck: this style will not finish
     if(world.penned===world.sheep.length)return {time:world.t,penned:world.penned,total:world.sheep.length};
+    if(world.wolf?.state==='hunt'){ // a wolf about: run the nearest dog straight at it
+      const w=world.wolf,d=world.dogs.reduce((a,b)=>Math.hypot(b.x-w.x,b.y-w.y)<Math.hypot(a.x-w.x,a.y-w.y)?b:a);
+      world.dogs.forEach(o=>{o.driving=false;});
+      Object.assign(d,{driving:true,targetX:w.x,targetY:w.y,maxSpeed:DOG_MAX,gain:6});
+      step(world,DT);lastPlan=-1;progressAt+=DT;
+      continue;
+    }
     if(world.t-lastPlan>=.1){
       lastPlan=world.t;
       const free=world.sheep.filter(s=>!s.penned);
@@ -77,10 +105,10 @@ function play(level,{sprintFrom,behind}){
       const cx=group.reduce((a,s)=>a+s.x,0)/group.length,cy=group.reduce((a,s)=>a+s.y,0)/group.length;
       let far=null,fd=0;for(const s of group){const d=Math.hypot(s.x-cx,s.y-cy);if(d>fd){fd=d;far=s;}}
       if(fd>18*Math.sqrt(group.length)+22){ // collect the stray back to the group
-        const ux=(far.x-cx)/fd,uy=(far.y-cy)/fd;target=[far.x+ux*40,far.y+uy*40];
+        target=standBehind(far.x,far.y,(far.x-cx)/fd,(far.y-cy)/fd,40);
       }else{ // drive the group along its sheep's way home
         let gx=0,gy=0;for(const s of group){const [a,b]=downhill(goalField(s),s.x,s.y);gx+=a;gy+=b;}
-        const gl=Math.hypot(gx,gy)||1,R=fd+10;target=[cx-gx/gl*(R+behind),cy-gy/gl*(R+behind)];
+        const gl=Math.hypot(gx,gy)||1;target=standBehind(cx,cy,-gx/gl,-gy/gl,fd+10+behind);
       }
       target=[Math.max(8,Math.min(world.W-8,target[0])),Math.max(8,Math.min(world.H-8,target[1]))];
       // switch to the dog with the shortest way there (like pressing Tab)
@@ -89,7 +117,7 @@ function play(level,{sprintFrom,behind}){
       for(const s of free){const ci=s.x/CELL|0,cj=s.y/CELL|0;for(let j=cj-reach;j<=cj+reach;j++)for(let i=ci-reach;i<=ci+reach;i++)
         if(i>=0&&j>=0&&i<GW&&j<GH&&Math.hypot(i*CELL+CELL/2-s.x,j*CELL+CELL/2-s.y)<62)crowd[j*GW+i]=1;}
       const fieldTo=field(dogCost,target[0],target[1],n=>crowd[n]?7:1);
-      const dist=world.dogs.map(d=>fieldTo[cellOf(d.x,d.y)]);
+      const dist=world.dogs.map((d,i)=>parkAt&&i===1?Infinity:fieldTo[cellOf(d.x,d.y)]);
       const bestDog=dist.indexOf(Math.min(...dist));if(dist[bestDog]<dist[active]-25)active=bestDog;
       dogField=fieldTo;
     }
@@ -104,12 +132,14 @@ function play(level,{sprintFrom,behind}){
 }
 // a few playing styles, from careful (walk near sheep, stay well back) to bold (sprint right behind them)
 const STYLES=[];for(const sprintFrom of [0,60,110,160])for(const behind of [25,45,70])STYLES.push({sprintFrom,behind});
+// flocks of 80 or more are slow to simulate: try only the careful styles, which do best on big flocks
+const BIG_STYLES=STYLES.filter(s=>s.sprintFrom<=60&&s.behind<=45);
 function best(level){
   let top=null;
-  for(const style of STYLES){const r=play(level,style);if(!top||(r.time??1e9)<(top.time??1e9)||(!top.time&&!r.time&&r.penned>top.penned))top={...r,style};}
+  for(const style of level.sheep.length>=80?BIG_STYLES:STYLES){const r=play(level,style);if(!top||(r.time??1e9)<(top.time??1e9)||(!top.time&&!r.time&&r.penned>top.penned))top={...r,style};}
   return top;
 }
-module.exports={play,best,STYLES,LEVELS};
+module.exports={play,best,STYLES,LEVELS,ORDER};
 if(require.main!==module)return;
 const line=(id,r)=>{
   const L=LEVELS[id],n=ORDER.indexOf(id)+1;
