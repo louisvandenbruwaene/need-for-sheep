@@ -6,17 +6,21 @@
 // The bot plays without the time limit and with three times its usual patience, so a slow level still gets numbers.
 // A level the bot cannot finish keeps its old numbers and is listed at the end.
 const fs=require('fs'),path=require('path'),os=require('os'),{fork}=require('child_process');
-const {LEVELS,ORDER}=require('./bot.cjs');
+const {LEVELS,ORDER,better,stylesFor}=require('./bot.cjs');
 const ROOT=path.join(__dirname,'..');
 
-const ids=process.argv.slice(2).map(Number),queue=[...(ids.length?ids:ORDER)],results={};
+// one job per level and playing style, as many at once as there are cores; a level is done when all its styles are
+const ids=process.argv.slice(2).map(Number),levels=ids.length?ids:ORDER,results={},left={};
+const queue=levels.flatMap(id=>{left[id]=stylesFor(LEVELS[id]).length;return stylesFor(LEVELS[id]).map((_,k)=>[id,k]);});
+const work=id=>{const L=LEVELS[id],[w,h]=L.field||[800,500];return L.sheep.length*w*h;};
+queue.sort((a,b)=>work(b[0])-work(a[0])); // the slowest first, so the run does not end on one long job
 let running=0;
 (function next(){
   while(running<os.cpus().length&&queue.length){
-    const id=queue.shift();running++;
-    fork(path.join(__dirname,'bot.cjs'),['--one',id],{env:{BOT_PATIENCE:'3',...process.env,BOT_UNLIMITED:'1'}}).on('message',r=>{
-      results[id]=r;running--;
-      console.log(`id${String(id).padStart(2)} ${LEVELS[id].name.padEnd(20)} ${r.time?r.time.toFixed(1)+' s':'FAIL '+r.penned+'/'+r.total}`);
+    const [id,k]=queue.shift();running++;
+    fork(path.join(__dirname,'bot.cjs'),['--style',id,k],{env:{BOT_PATIENCE:'3',...process.env,BOT_UNLIMITED:'1'}}).on('message',r=>{
+      results[id]=better(results[id],r);running--;
+      if(!--left[id]){const b=results[id];console.log(`id${String(id).padStart(2)} ${LEVELS[id].name.padEnd(20)} ${b.time?b.time.toFixed(1)+' s':'FAIL '+b.penned+'/'+b.total}`);}
       if(!queue.length&&!running)write();else next();
     });
   }

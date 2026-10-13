@@ -1,6 +1,6 @@
 # Need for Sheep
 
-Need for Sheep: herd the flock into the pen with your sheepdog, and sort ewes from lambs. 50 levels over eight farms, from a single sheep in a walled paddock to a hundred and fifty driven the length of a valley. One HTML file plus five sound clips in [`audio/`](audio), no build step: open [`index.html`](index.html).
+Need for Sheep: herd the flock into the pen with your sheepdog, and sort ewes from lambs. 60 levels over eleven farms, from a single sheep in a walled paddock to a hundred and fifty driven the length of a valley, through night, fog, snow and storm, with a wolf about, and a full sheepdog trial to finish. One HTML file plus five sound clips in [`audio/`](audio), no build step: open [`index.html`](index.html).
 
 Fields are zoomed out until they fit the screen. A field too big for that is seen through a camera that follows your dog, with a map in the corner: tap the map to send the dog there on its own, the way a shepherd sends a dog on its outrun. A sent dog keeps going while you switch to the other one.
 
@@ -8,7 +8,11 @@ Most levels give you one dog. A second dog appears only where you need it to blo
 
 Two levels carry a three-step tutorial: the first level teaches herding, Shepherd's test teaches splitting a flock with a bark. Each prompt points at where to go and moves on once you have done it.
 
-Sheep keep together: on an open field one that loses sight of the flock walks back to the nearest flockmate, and penned sheep amble to the back of the pen so the gateway stays clear for the rest. A pen is either flush against a wall or edge, or has plenty of room round it, so no sheep wedges itself behind one.
+Sheep keep together: on an open field one that loses sight of the flock walks back to the nearest flockmate, and penned sheep amble to the back of the pen so the gateway stays clear for the rest. A pen is either flush against a wall or edge, or has plenty of room round it, so no sheep wedges itself behind one, and every right-angled pocket where a pen, fence or river meets the field's edge (and the field's own corners) gets a short diagonal panel, so no sheep gets stuck in a corner either.
+
+**All weathers** changes what you see: at night only your dog's light and the pen lanterns show the field (and sheep eyes shining in the dark), fog closes in round the dog, snow fills with tracks, and in a storm every clap of thunder spooks the flock. In **Wolf country** a wolf slips out of the woods now and then and scatters the flock: run your dog at it, or bark near it, and it bolts back to its den.
+
+**Trial day** is a real sheepdog trial: pairs of hurdles (fetch, drive and cross-drive gates) that three quarters of the flock must pass between, each with a counter, and the pen stays padlocked until the course is done.
 
 The field is alive: sheep graze, blink, chatter in speech bubbles and now and then faint when barked at; crows peck about, scatter when the dog comes and sometimes ride on a sheep's back; cloud shadows drift over; mud takes footprints. Each farm has its own light. A full pen bounces, the last sheep in sets off confetti, and the results card adds up how far your dog ran.
 
@@ -37,5 +41,5 @@ The anon key is meant to be public: row-level security lets visitors only add a 
 ## Level tools
 
 - `node tools/check.cjs` checks every layout: nothing starts inside a rock, wall or pen, and the ground beside each pen is either shut or at least 160 px open.
-- `node tools/bot.cjs [levelId ...]` plays levels with the game's own simulation, trying a few styles from careful to bold, and prints its best time beside each level's star times. On a level with a `blocker` spot it parks dog 2 there first.
+- `node tools/bot.cjs [levelId ...]` plays levels with the game's own simulation, trying a few styles from careful to bold (with and without barking at strayed lambs), and prints its best time beside each level's star times. On a level with a `blocker` spot it parks dog 2 there first; when a wolf is about it runs the nearest dog at it; on a trial course it drives the flock through each pair of hurdles in turn before the pen.
 - `node tools/par.cjs [levelId ...]` runs the bot without time limits and writes star times, time limits and leaderboard floors back into `index.html` and `leaderboard.sql`: gold 1.5x the bot (1.3x on sorting levels, 1.0x on flocks of 40 or more, which the bot herds in pieces), the other star 1.4x gold, the limit 1.4x that. A level the bot cannot finish keeps its numbers and is listed, so look at it: the bot still struggles with sheep pinned in corners.
