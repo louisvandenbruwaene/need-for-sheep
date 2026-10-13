@@ -23,7 +23,7 @@ alter table scores enable row level security;
 -- Re-run this file after adding or changing levels.
 drop policy if exists "anyone adds a plausible time" on scores;
 create policy "anyone adds a plausible time" on scores for insert to anon
-  with check (time >= (array[3,5,13.5,13,19.5,20,13.5,73.5,30,16.5,4.5,33,12,73,79.5,13,46,60.5,17,5.5,14,49.5,68.5,118,56.5,128,96,65.5,110.5,104.5,147.5,22.5,38.5,81,66.5,180,30,82,55.5,39.5,126,73,173,108.5,102,78.5,334,991,155,196.5,208.5,61.5,55.5,108,15.5,369.5,92,34,62.5,79])[level + 1]);
+  with check (time >= (array[3,5,13.5,13,19.5,20,13.5,73.5,30,16.5,4.5,33,12,73,79.5,13,46,60.5,17,5.5,14,49.5,68.5,118,56.5,128,96,65.5,110.5,104.5,147.5,22.5,38.5,81,66.5,180,30,82,55.5,39.5,126,73,173,108.5,102,78.5,334,344,155,196.5,208.5,61.5,55.5,108,15.5,103.5,92,34,62.5,79])[level + 1]);
 
 -- The board shows each name once, with its best time and that run's ghost.
 drop view if exists best;

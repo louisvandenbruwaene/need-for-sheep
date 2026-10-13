@@ -272,7 +272,7 @@ const LEVELS=[
     sheep:[...cluster(300,300,25,90,113),...cluster(1400,250,25,90,114),...cluster(2500,300,25,90,115),...cluster(400,1000,25,90,116),...cluster(2400,1050,25,90,117),...cluster(1400,800,25,90,118)],
     rocks:[[900,600,60],[1900,600,60],[800,1350,50],[2000,1350,50]],bush:[[1400,500,50],[600,700,45],[2200,700,45]],mud:[[1000,1000,300,200],[1600,1100,260,180]],pen:{x:1240,y:1380,w:320,h:320,gate:'top',gateWidth:170},par:{time:1169,gold:835},limit:1640},
   {name:'Shearing day',tip:'Sixty ewes to the shearing pen, thirty lambs to the nursery. Bark to split them.',field:[2000,1200],dogs:[[1000,1150]],sheep:[...cluster(1000,550,60,180,119),...lambs(cluster(1000,550,30,180,120))],
-    pens:[{x:0,y:0,w:300,h:300,gate:'right',gateWidth:160,kind:EWE},{x:1700,y:900,w:300,h:300,gate:'left',gateWidth:160,kind:LAMB}],rocks:[[1000,150,55],[1000,1000,55]],par:{time:3468,gold:2477},limit:4860},
+    pens:[{x:0,y:0,w:300,h:300,gate:'right',gateWidth:160,kind:EWE},{x:1700,y:900,w:300,h:300,gate:'left',gateWidth:160,kind:LAMB}],rocks:[[1000,150,55],[1000,1000,55]],par:{time:1204,gold:860},limit:1690},
   {name:'Sea cliffs',tip:'Sheep will not go near the sea. Use the shore as your second dog.',field:[2400,1400],dogs:[[300,1050]],sheep:cluster(600,500,120,220,121),water:[[0,1150,2400,250]],rocks:[[1300,500,60],[1700,850,50]],bush:[[1000,950,45]],
     pen:{x:2100,y:0,w:300,h:300,gate:'bottom',gateWidth:160},par:{time:543,gold:388},limit:770},
   {name:'The big drive',tip:'A hundred and fifty, from one end of the valley to the other.',field:[3200,1300],dogs:[[60,650]],sheep:cluster(500,650,150,260,122),
@@ -290,7 +290,7 @@ const LEVELS=[
   {name:'Wolf at the door',tip:'A wolf lives in the woods. Run your dog at it, or bark, and it bolts.',field:[1600,1000],dogs:[[300,900]],sheep:cluster(700,350,40,140,140),
     wolf:{den:[1600,150],at:12,every:40},rocks:[[1100,600,50]],pen:{x:0,y:760,w:240,h:240,gate:'right',gateWidth:150},par:{time:55,gold:39},limit:90},
   {name:'The long night',tip:'Night, lambs, and a wolf. Keep your light between them.',weather:'night',field:[2000,1300],dogs:[[1000,1000]],sheep:[...cluster(1000,400,50,170,141),...lambs(cluster(1000,400,15,170,142))],
-    wolf:{den:[0,300],at:20,every:45},bush:[[500,700,50],[1500,700,50]],pen:{x:850,y:1060,w:300,h:240,gate:'top',gateWidth:160},par:{time:1292,gold:923},limit:1810},
+    wolf:{den:[0,300],at:20,every:45},bush:[[500,700,50],[1500,700,50]],pen:{x:850,y:1060,w:300,h:240,gate:'top',gateWidth:160},par:{time:363,gold:259},limit:510},
   {name:'Pack country',tip:'A hundred and twenty sheep, and the wolf keeps coming back.',field:[2400,1500],dogs:[[800,1440]],sheep:cluster(1200,500,120,230,143),
     wolf:{den:[2400,700],at:10,every:25},rocks:[[700,900,60],[1700,900,60]],pen:{x:1050,y:1180,w:300,h:320,gate:'top',gateWidth:170},par:{time:322,gold:230},limit:460},
   // 57-59: Trial day. Drive three quarters of the flock between each pair of hurdles; the pen opens after the last.
