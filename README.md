@@ -1,12 +1,18 @@
 # Need for Sheep
 
-Need for Sheep: herd the flock into the pen with one, two or three dogs, and sort ewes from lambs. 43 levels over seven farms. The last farm, Open hill, has fields up to three screens wide with flocks of forty to fifty-five and one or two dogs: the view follows your dog, zoomed out a little, and a map in the corner shows the whole field. Tap the map to send your dog there on its own, the way a shepherd sends a dog on its outrun. One HTML file plus five sound clips in [`audio/`](audio), no build step: open [`index.html`](index.html).
+Need for Sheep: herd the flock into the pen with your sheepdog, and sort ewes from lambs. 50 levels over eight farms, from a single sheep in a walled paddock to a hundred and fifty driven the length of a valley. One HTML file plus five sound clips in [`audio/`](audio), no build step: open [`index.html`](index.html).
+
+Fields are zoomed out until they fit the screen. A field too big for that is seen through a camera that follows your dog, with a map in the corner: tap the map to send the dog there on its own, the way a shepherd sends a dog on its outrun. A sent dog keeps going while you switch to the other one.
+
+Most levels give you one dog. A second dog appears only where you need it to block off somewhere the flock would get stuck (a side yard, an old quarry, a gateway to nowhere); a pulsing ring shows where to park it.
 
 Two levels carry a three-step tutorial: the first level teaches herding, Shepherd's test teaches splitting a flock with a bark. Each prompt points at where to go and moves on once you have done it.
 
-Sheep that lose sight of the flock walk back to the nearest flockmate, and penned sheep amble to the back of the pen so the gateway stays clear for the rest.
+Sheep keep together: on an open field one that loses sight of the flock walks back to the nearest flockmate, and penned sheep amble to the back of the pen so the gateway stays clear for the rest. A pen is either flush against a wall or edge, or has plenty of room round it, so no sheep wedges itself behind one.
 
-Controls: drag to run the dog (close to walk, far to sprint) or arrow keys / WASD with Shift to sprint. Space barks. Tab or right-click switches dog, 1-3 picks one. P or Esc pauses (so does leaving the window), R restarts, M mutes, G hides the ghost, Enter goes on from the results.
+The field is alive: sheep graze, blink, chatter in speech bubbles and now and then faint when barked at; crows peck about, scatter when the dog comes and sometimes ride on a sheep's back; cloud shadows drift over; mud takes footprints. Each farm has its own light. A full pen bounces, the last sheep in sets off confetti, and the results card adds up how far your dog ran.
+
+Controls: drag to run the dog (close to walk, far to sprint) or arrow keys / WASD with Shift to sprint. Space barks. Hold Q (come bye) or E (away to me) and the dog circles the nearest bunch of sheep clockwise or anticlockwise, the way a shepherd whistles a dog round its flock; the ↻ and ↺ buttons do the same on touch. Tab or right-click switches dog, 1-3 picks one. P or Esc pauses (so does leaving the window), R restarts, M mutes, G hides the ghost, Enter goes on from the results.
 
 Sorting pens are labelled EWES or LAMBS. They take any sheep but only count their own kind, and a sheep in the wrong pen stays free to be driven out. A gate swings shut once its pen holds every sheep it needs. Your best run on each level comes back as a ghost dog to race.
 
@@ -23,11 +29,13 @@ The app opens the game in its own Brave window. The folder path is baked in, so 
 
 After a win, **Leaderboard** lets the player send their time under a name and shows the top five for that level (best time per name). Each time carries its run's dog paths: tap a row to race that ghost. Scores live in a free [Supabase](https://supabase.com) project:
 
-1. Create a project, open **SQL Editor**, paste [`leaderboard.sql`](leaderboard.sql) and run it (re-running it on an existing project adds the ghost column).
+1. Create a project, open **SQL Editor**, paste [`leaderboard.sql`](leaderboard.sql) and run it (re-running it on an existing project updates its checks and floors).
 2. In **Project Settings > API**, copy the project URL and the `anon` public key into `const BOARD={url:'',key:''}` in `index.html`.
 
 The anon key is meant to be public: row-level security lets visitors only add a time (above a per-level floor) and read the board. While `BOARD.url` is empty the button stays hidden.
 
-## Herding bot
+## Level tools
 
-`node tools/bot.cjs [levelId ...]` plays levels with the game's own simulation, one dog at a time, trying a few styles from careful to bold, and prints its best time beside each level's star times. Use it to check a new or changed level can be finished and to set its stars (gold about 1.5x the bot, 1.3x for sorting levels, the other star 1.4x gold) and the leaderboard floor (0.7x the bot). On Open hill the bot works a big flock in pieces and is slow, so there gold is the bot's own time and the floor 0.4x. It still struggles with sheep pinned in field corners, so a FAIL means "look at it", not "impossible".
+- `node tools/check.cjs` checks every layout: nothing starts inside a rock, wall or pen, and the ground beside each pen is either shut or at least 160 px open.
+- `node tools/bot.cjs [levelId ...]` plays levels with the game's own simulation, trying a few styles from careful to bold, and prints its best time beside each level's star times. On a level with a `blocker` spot it parks dog 2 there first.
+- `node tools/par.cjs [levelId ...]` runs the bot without time limits and writes star times, time limits and leaderboard floors back into `index.html` and `leaderboard.sql`: gold 1.5x the bot (1.3x on sorting levels, 1.0x on flocks of 40 or more, which the bot herds in pieces), the other star 1.4x gold, the limit 1.4x that. A level the bot cannot finish keeps its numbers and is listed, so look at it: the bot still struggles with sheep pinned in corners.

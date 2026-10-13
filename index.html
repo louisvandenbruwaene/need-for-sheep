@@ -27,10 +27,14 @@ body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:1
 .title{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;min-width:0}
 h1{font-family:var(--f-display);font-weight:700;font-size:30px;margin:0;letter-spacing:-.01em}
 #lvname{font-family:var(--f-display);font-weight:500;font-size:18px;color:var(--muted)}
-.levels{display:flex;gap:8px 14px;flex-wrap:wrap}
-.farm{display:grid;gap:3px}
-.farm>span{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
-.farm>div{display:flex;gap:6px;flex-wrap:wrap}
+.levels{display:flex;gap:8px 12px;flex-wrap:wrap;align-items:center}
+.farmnav{display:flex;align-items:center;gap:6px}
+.farmnav button{width:34px;padding:8px 0}
+.farmname{display:grid;line-height:1.15;min-width:150px;text-align:center}
+.farmname span{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.farmname b{font-family:var(--f-display);font-weight:600;font-size:16px}
+.farmname small{font-size:11px;color:var(--accent)}
+.farmlevels{display:flex;gap:6px;flex-wrap:wrap}
 #starTotal{font-family:var(--f-display);font-weight:600;font-size:16px;color:var(--accent)}
 .lv{width:44px;padding:5px 0 4px;display:grid;justify-items:center;gap:0;line-height:1.1}
 .lv b{font-size:16px}.lv small{font-size:10px;letter-spacing:1px;color:var(--accent)}
@@ -45,6 +49,8 @@ button:active{transform:translateY(2px);box-shadow:0 1px 0 #151a13}
 button:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
 button.primary{background:var(--accent);color:#2a2410;min-width:96px}
 button.off{opacity:.45}
+button.whistle{width:44px;padding:9px 0;touch-action:none}
+button.whistle.on{background:var(--accent);color:#2a2410}
 .dog{display:flex;align-items:center;gap:7px}
 .dog i{width:12px;height:12px;border-radius:50%;display:block;box-shadow:0 0 0 2px #151a13}
 .dog.sel{box-shadow:0 0 0 3px var(--c) inset,0 3px 0 #151a13}
@@ -59,6 +65,10 @@ button.off{opacity:.45}
 .stars span{font-size:44px;line-height:1;color:var(--line)}
 .stars span.on{color:var(--accent);animation:pop .45s cubic-bezier(.3,1.6,.5,1) backwards}
 .best{font-family:var(--f-display);color:var(--accent);min-height:1.2em}
+.fun{font-size:13px;color:var(--muted);max-width:300px;justify-self:center}
+#sSheep.bump{animation:bump .3s cubic-bezier(.3,1.8,.5,1)}
+@keyframes bump{0%{transform:scale(1.5);color:var(--accent)}100%{transform:scale(1)}}
+.stat b{display:inline-block;transform-origin:left center}
 .goals{display:grid;gap:4px;text-align:left;font-variant-numeric:tabular-nums}
 .goals div{display:flex;gap:8px}.goals .ok{color:var(--good)}.goals .no{color:var(--muted)}
 .res .group{justify-content:center}
@@ -92,6 +102,7 @@ button.off{opacity:.45}
         <h2 id="ovTitle"></h2>
         <div class="stars" id="ovStars"></div>
         <div class="best" id="ovBest"></div>
+        <div class="fun" id="ovFun"></div>
         <div class="goals" id="ovGoals"></div>
         <button class="board-open" id="boardOpen">Leaderboard</button>
         <div class="board" id="board" hidden>
@@ -113,6 +124,8 @@ button.off{opacity:.45}
     <div class="group">
       <button id="bGhost" title="G: show or hide the ghost">Ghost</button>
       <button id="bSound" title="M: sound on or off" aria-label="Sound">🔊</button>
+      <button class="whistle" id="bComeBye" title="Q (hold): come bye, circle the flock clockwise" aria-label="Come bye">↻</button>
+      <button class="whistle" id="bAway" title="E (hold): away to me, circle the flock anticlockwise" aria-label="Away to me">↺</button>
       <button id="bBark" title="Space">Bark <small id="barkCd"></small></button>
       <button class="primary" id="bRestart">Restart</button>
     </div>
@@ -145,7 +158,7 @@ const REJOIN=320;              // a sheep with no flockmate in sight walks back 
 const HIDE_SEEK=200,HIDE_SPEED=100; // after a bark, lambs look for ewes this close and trot (not sprint) behind them
 
 /* ---------- small helpers ---------- */
-const clamp=(v,lo,hi)=>Math.max(lo,Math.min(hi,v));
+const clamp=(v,lo,hi)=>v<lo?lo:v>hi?hi:v;
 const inRect=(rects,p)=>rects.some(([x,y,w,h])=>p.x>x&&p.x<x+w&&p.y>y&&p.y<y+h);
 const inBush=(world,p)=>world.bushes.some(([x,y,r])=>Math.hypot(p.x-x,p.y-y)<r);
 const isSheep=body=>body.kind!==undefined;
@@ -187,52 +200,99 @@ function cluster(cx,cy,count,spread,seed){
 // fences [x1,y1,x2,y2], rocks [x,y,r], water / mud / bridges [x,y,w,h], bushes [x,y,r],
 // par {time,gold} for the stars, limit (seconds) and a tip shown before the start.
 // A pen with a kind (EWE or LAMB) is a sorting pen: it takes any sheep but only counts its own kind.
+// Every pen sits flush against the field edge, a fence or another pen, or has at least 110 px of open
+// ground beside it, so no sheep can get stuck in a slot behind it (tools/check.cjs checks this).
+// One dog, unless a second one is needed to block off somewhere the flock would get stuck: then blocker [x,y]
+// is where it should stand (the game marks it, the bot parks dog 2 there).
+// Star times (par) and limits are written by tools/par.cjs from the herding bot.
 const LEVELS=[
-  {name:'First sheep',dogs:[[90,250]],sheep:[[330,262]],pen:{x:640,y:190,w:120,h:120,gate:'left'},par:{time:8,gold:6}},
-  {name:'A few more',dogs:[[90,410]],sheep:cluster(320,190,3,35,2),pen:{x:640,y:190,w:120,h:120,gate:'left'},par:{time:7,gold:5}},
-  {name:'The rock',dogs:[[80,250]],sheep:cluster(250,250,5,45,3),rocks:[[450,250,48]],pen:{x:640,y:190,w:120,h:120,gate:'left'},par:{time:16,gold:11}},
-  {name:'Up the hill',dogs:[[40,470]],sheep:cluster(170,370,8,45,4),pen:{x:335,y:16,w:130,h:110,gate:'bottom'},par:{time:11,gold:8}},
-  {name:'Second dog',dogs:[[50,120],[50,380]],sheep:[...cluster(240,110,5,38,6),...cluster(240,390,5,38,7)],pen:{x:650,y:185,w:120,h:130,gate:'left'},par:{time:21,gold:15}},
-  {name:'Fence line',dogs:[[50,150],[50,350]],sheep:cluster(220,250,10,60,8),fences:[[430,16,430,200],[430,300,430,484]],pen:{x:650,y:185,w:120,h:130,gate:'left'},par:{time:10,gold:7}},
-  {name:'Big flock',dogs:[[40,90],[40,250],[40,410]],sheep:cluster(290,250,20,95,12),rocks:[[520,140,36],[520,360,36]],pen:{x:650,y:180,w:130,h:140,gate:'left'},par:{time:13,gold:9}},
-  {name:'Scattered',dogs:[[30,120],[30,250],[30,380]],sheep:[...cluster(210,130,5,30,9),...cluster(160,250,5,30,10),...cluster(210,370,5,30,11)],pen:{x:650,y:180,w:130,h:140,gate:'left'},par:{time:25,gold:18}},
-  {name:'Corner pen',dogs:[[40,460]],sheep:cluster(200,330,8,50,21),rocks:[[420,250,40],[560,380,30]],pen:{x:640,y:16,w:140,h:120,gate:'bottom'},par:{time:24,gold:17}},
-  {name:'Needle gap',dogs:[[40,250]],sheep:cluster(200,250,8,55,22),fences:[[420,16,420,330],[420,410,420,484]],pen:{x:650,y:190,w:130,h:120,gate:'left'},par:{time:15,gold:11}},
-  {name:'Turn back',dogs:[[760,460]],sheep:cluster(560,330,8,45,23),pen:{x:20,y:190,w:130,h:120,gate:'right'},rocks:[[330,170,40],[330,360,40]],par:{time:7,gold:5}},
-  {name:'Boulder field',dogs:[[40,250]],sheep:cluster(170,250,10,55,24),rocks:[[330,120,30],[330,380,30],[420,250,34],[520,130,30],[520,370,30],[600,250,26]],pen:{x:660,y:190,w:120,h:120,gate:'left'},par:{time:38,gold:28}},
-  {name:'Ewes and lambs',tip:'Lambs are small, quick and skittish. Walk, do not sprint.',dogs:[[40,250]],sheep:[...cluster(220,250,5,35,51),...lambs(cluster(300,150,4,40,52))],pen:{x:650,y:185,w:130,h:130,gate:'left'},par:{time:30,gold:22}},
-  {name:'Split field',dogs:[[40,120],[40,380]],sheep:[...cluster(250,120,6,40,25),...cluster(250,380,6,40,26)],fences:[[16,250,520,250]],pen:{x:650,y:190,w:130,h:120,gate:'left'},par:{time:28,gold:20}},
-  {name:'Round the back',dogs:[[40,250]],sheep:cluster(200,250,8,50,27),fences:[[560,90,560,410]],pen:{x:620,y:190,w:130,h:120,gate:'right'},par:{time:25,gold:18}},
-  {name:'Pick a pen',tip:'Any pen will do. Ewes and lambs may share.',dogs:[[400,460]],sheep:[...cluster(400,250,5,50,53),...lambs(cluster(400,250,5,50,54))],rocks:[[400,90,34]],pens:[{x:20,y:16,w:130,h:130,gate:'right'},{x:650,y:16,w:130,h:130,gate:'left'}],par:{time:19,gold:14}},
-  {name:'Middle pen',dogs:[[40,40],[760,460]],sheep:[...cluster(140,400,5,35,28),...cluster(660,110,5,35,29)],pen:{x:335,y:190,w:130,h:120,gate:'top'},par:{time:46,gold:33}},
-  {name:'Zigzag',dogs:[[40,400]],sheep:cluster(150,400,8,45,30),fences:[[290,140,290,484],[510,16,510,360]],pen:{x:650,y:190,w:130,h:120,gate:'left'},par:{time:37,gold:27}},
-  {name:'Stampede',dogs:[[40,250]],sheep:cluster(230,250,25,90,31),pen:{x:650,y:180,w:130,h:140,gate:'left'},par:{time:22,gold:16}},
-  {name:'Both ways',tip:'Ewes to the ewe pen, lambs to the lamb pen. A sheep in the wrong pen does not count.',dogs:[[400,40],[400,460]],sheep:[...cluster(280,140,6,40,55),...lambs(cluster(520,360,6,40,56))],fences:[[400,110,400,390]],pens:[{x:20,y:185,w:130,h:130,gate:'right',kind:EWE},{x:650,y:185,w:130,h:130,gate:'left',kind:LAMB}],par:{time:10,gold:7}},
-  {name:'Funnel',dogs:[[40,120],[40,380]],sheep:cluster(210,250,14,80,32),fences:[[380,16,560,200],[380,484,560,300]],rocks:[[260,250,30]],pen:{x:650,y:190,w:130,h:120,gate:'left'},par:{time:33,gold:24}},
-  {name:'Hill top',dogs:[[400,470],[60,250]],sheep:[...cluster(140,380,6,40,33),...cluster(660,380,6,40,34)],rocks:[[400,300,40]],pen:{x:335,y:16,w:130,h:110,gate:'bottom'},par:{time:32,gold:23}},
-  {name:'Lambs uphill',dogs:[[40,420],[760,460]],sheep:[...cluster(200,380,6,50,57),...lambs(cluster(200,380,6,50,58))],rocks:[[300,250,34],[500,250,34]],pen:{x:335,y:16,w:130,h:110,gate:'bottom'},par:{time:59,gold:43},limit:110},
-  {name:'Three gaps',dogs:[[40,250]],sheep:cluster(160,250,8,45,35),fences:[[280,16,280,330],[430,170,430,484],[580,16,580,330]],pen:{x:650,y:190,w:130,h:120,gate:'left'},par:{time:41,gold:30}},
-  {name:'Four corners',dogs:[[400,40],[400,460],[60,250]],sheep:[...cluster(90,80,4,28,36),...cluster(710,80,4,28,37),...cluster(90,420,4,28,38),...cluster(710,420,4,28,39)],pen:{x:335,y:190,w:130,h:120,gate:'bottom'},par:{time:88,gold:63},limit:160},
-  {name:'Market day',tip:'A lamb strayed in with the ewes, and a ewe in with the lambs.',dogs:[[40,90],[40,250],[40,410]],sheep:[...cluster(220,110,7,45,59),...lambs([[300,150]]),...lambs(cluster(220,390,7,45,60)),[300,350]],fences:[[150,250,560,250]],pens:[{x:650,y:30,w:130,h:130,gate:'left',kind:EWE},{x:650,y:340,w:130,h:130,gate:'left',kind:LAMB}],par:{time:149,gold:106},limit:190},
-  {name:'Big round',dogs:[[40,90],[40,410]],sheep:cluster(200,250,20,80,40),fences:[[560,90,560,410]],rocks:[[400,140,30],[400,360,30]],pen:{x:620,y:190,w:130,h:120,gate:'right'},par:{time:57,gold:41},limit:110},
-  {name:'Flock of thirty',dogs:[[40,90],[40,250],[40,410]],sheep:[...cluster(200,110,10,50,41),...cluster(200,390,10,50,42),...cluster(420,250,10,50,43)],rocks:[[560,120,30],[560,380,30]],pen:{x:650,y:180,w:130,h:140,gate:'left'},par:{time:33,gold:24}},
-  {name:'Shepherd’s test',tip:'Bark and the lambs run round behind the ewes. Use it to split the flock.',dogs:[[40,90],[40,250],[40,410]],sheep:[...cluster(220,250,10,70,65),...lambs(cluster(220,250,10,70,66))],pens:[{x:650,y:16,w:130,h:130,gate:'bottom',kind:EWE},{x:650,y:354,w:130,h:130,gate:'top',kind:LAMB}],fences:[[460,16,460,170],[460,330,460,484]],par:{time:82,gold:58},limit:160},
-  {name:'Grand trial',dogs:[[40,90],[40,250],[40,410]],sheep:[...cluster(150,120,8,40,44),...cluster(150,380,8,40,45),...cluster(330,250,8,40,46)],fences:[[440,16,440,320],[580,180,580,484]],rocks:[[250,250,26]],pen:{x:650,y:16,w:130,h:130,gate:'bottom'},par:{time:59,gold:43},limit:110},
-  {name:'Woof!',tip:'Space or Bark: ewes huddle and stray lambs run back behind them.',dogs:[[40,250]],sheep:[...cluster(300,250,6,30,71),...lambs(cluster(300,250,6,130,72))],pen:{x:650,y:185,w:130,h:130,gate:'left'},par:{time:40,gold:29}},
-  {name:'The bridge',tip:'Sheep will not swim. Your dog will, slowly.',dogs:[[40,250]],sheep:cluster(200,250,10,55,73),water:[[390,0,60,212],[390,288,60,212]],bridges:[[390,212,60,76]],pen:{x:650,y:185,w:130,h:130,gate:'left'},par:{time:14,gold:10}},
-  {name:'Mud flats',tip:'Mud slows everyone down. Go round, or push through.',dogs:[[40,420]],sheep:cluster(180,380,10,50,74),mud:[[260,40,190,170],[300,260,170,200],[520,150,110,190]],pen:{x:650,y:16,w:130,h:120,gate:'bottom'},par:{time:23,gold:16}},
-  {name:'Hide and seek',tip:'Scared sheep hide in bushes. Walk, do not sprint, and go in close to flush them out.',dogs:[[40,120],[40,380]],sheep:[...cluster(230,120,3,25,75),...cluster(380,330,3,25,76),...cluster(200,400,3,25,77),...cluster(470,120,3,25,78)],bush:[[280,160,38],[430,300,42],[250,330,34],[520,170,36]],pen:{x:650,y:185,w:130,h:130,gate:'left'},par:{time:28,gold:20}},
-  {name:'River crossing',tip:'Only the bridge crosses the river. Bark to call stray lambs back.',dogs:[[40,440],[40,330]],sheep:[...cluster(220,400,6,45,79),...lambs(cluster(220,400,6,45,80))],water:[[0,225,350,50],[450,225,350,50]],bridges:[[350,225,100,50]],pen:{x:650,y:40,w:130,h:130,gate:'left'},par:{time:40,gold:28},limit:130},
-  {name:'Farm day',tip:'Everything at once. Walk, bark, and use the bridge.',dogs:[[40,90],[40,250],[40,410]],sheep:[...cluster(200,180,7,45,81),...lambs(cluster(200,300,7,45,82))],water:[[520,0,50,205],[520,275,50,225]],bridges:[[520,205,50,70]],mud:[[300,60,140,120]],bush:[[330,390,40]],pens:[{x:650,y:30,w:130,h:130,gate:'bottom',kind:EWE},{x:650,y:340,w:130,h:130,gate:'top',kind:LAMB}],par:{time:170,gold:121},limit:220},
-  // Open hill: fields bigger than the screen, flocks of forty to fifty, one or two dogs, long fetches.
-  // The bot herds big flocks in pieces and is slow here, so gold is the bot's own time, not 1.5x it.
-  {name:'Hill flock',tip:'The field is bigger than the screen. Tap the map to send your dog round.',field:[1600,1000],dogs:[[800,940]],sheep:cluster(900,230,40,150,90),rocks:[[400,520,40],[1250,600,50]],bush:[[300,250,40]],pen:{x:40,y:740,w:220,h:220,gate:'right',gateWidth:140},par:{time:94,gold:67},limit:240},
-  {name:'The long fetch',tip:'Go wide round the flock, then bring it home at a walk.',field:[2400,1500],dogs:[[200,1420]],sheep:cluster(1900,300,50,220,91),rocks:[[1100,700,60],[1700,1000,45],[600,900,50]],bush:[[2100,700,45],[1300,300,40]],mud:[[900,1050,300,200]],pen:{x:40,y:1240,w:240,h:220,gate:'right',gateWidth:140},par:{time:352,gold:251},limit:450},
-  {name:'Through the gateway',field:[2000,1250],dogs:[[1000,560]],sheep:cluster(700,250,50,200,92),fences:[[0,620,900,620],[1100,620,2000,620]],rocks:[[1500,300,50],[500,950,45]],pen:{x:1740,y:990,w:220,h:220,gate:'left',gateWidth:140},par:{time:154,gold:110},limit:300},
-  {name:'Down the lane',tip:'Funnel the flock into the lane and walk it all the way down.',field:[1400,2400],dogs:[[700,1000]],sheep:cluster(700,330,50,170,93),fences:[[60,640,550,900],[1340,640,850,900],[550,900,550,2120],[850,900,850,2120]],rocks:[[300,250,45],[1100,420,50]],pen:{x:590,y:2150,w:220,h:220,gate:'top',gateWidth:140},par:{time:139,gold:99},limit:360},
-  {name:'The ford',tip:'Ewes with their lambs. Only the bridge crosses the river.',field:[2400,1400],dogs:[[1050,700]],sheep:[...cluster(500,700,30,150,94),...lambs(cluster(500,700,15,150,95))],water:[[1150,0,110,600],[1150,800,110,600]],bridges:[[1150,600,110,200]],rocks:[[800,1000,50]],bush:[[1700,400,45],[1900,1050,40]],pen:{x:2140,y:580,w:230,h:240,gate:'left',gateWidth:140},par:{time:669,gold:478},limit:840},
-  {name:'The gather',tip:'Five bunches on the hill. Gather them, then bring them home.',field:[2400,1500],dogs:[[900,1420],[1500,1420]],sheep:[...cluster(300,250,10,60,96),...cluster(1200,180,10,60,97),...cluster(2100,280,10,60,98),...cluster(450,900,10,60,99),...cluster(1950,950,10,60,100)],rocks:[[800,550,55],[1600,600,55]],bush:[[1200,700,45]],pen:{x:1090,y:1240,w:220,h:220,gate:'top',gateWidth:140},par:{time:364,gold:260},limit:450},
-  {name:'Shedding',tip:'Forty mixed. Bark to split the lambs off, then pen each kind.',field:[1800,1100],dogs:[[200,550],[1600,550]],sheep:[...cluster(900,550,24,110,101),...lambs(cluster(900,550,16,110,102))],pens:[{x:40,y:40,w:220,h:220,gate:'right',gateWidth:140,kind:EWE},{x:1540,y:840,w:220,h:220,gate:'left',gateWidth:140,kind:LAMB}],rocks:[[900,200,50],[900,900,50]],par:{time:498,gold:356},limit:620},
+  {name:'First sheep',dogs:[[90,250]],sheep:[[330,262]],pen:{x:670,y:190,w:130,h:120,gate:'left'},par:{time:10,gold:7},limit:90},
+  {name:'A few more',dogs:[[90,410]],sheep:cluster(320,190,6,45,2),pen:{x:670,y:190,w:130,h:120,gate:'left'},par:{time:15,gold:11},limit:90},
+  {name:'The rock',field:[1000,620],dogs:[[80,310]],sheep:cluster(280,310,12,55,3),rocks:[[560,310,60]],pen:{x:860,y:245,w:140,h:130,gate:'left'},par:{time:42,gold:30},limit:90},
+  {name:'Up the hill',dogs:[[40,470]],sheep:cluster(200,360,12,55,4),pen:{x:335,y:0,w:130,h:120,gate:'bottom'},par:{time:17,gold:12},limit:90},
+  {name:'Second dog',blocker:[570,240],tip:'Sheep love to wander into the side yard. Park dog 2 in its mouth, then switch back with Tab.',field:[1100,680],dogs:[[60,340],[1040,620]],sheep:cluster(250,360,20,65,6),
+    fences:[[450,0,450,220],[690,0,690,220],[450,220,510,220],[630,220,690,220]],pen:{x:960,y:270,w:140,h:140,gate:'left'},par:{time:57,gold:41},limit:90},
+  {name:'Fence line',field:[1100,680],dogs:[[60,340]],sheep:cluster(260,340,25,75,8),fences:[[600,0,600,280],[600,400,600,680]],pen:{x:960,y:270,w:140,h:140,gate:'left'},par:{time:59,gold:42},limit:90},
+  {name:'Big flock',field:[1200,750],dogs:[[60,375]],sheep:cluster(380,375,45,110,12),rocks:[[760,200,50],[760,550,50]],pen:{x:1030,y:290,w:170,h:170,gate:'left',gateWidth:130},par:{time:48,gold:34},limit:90},
+  {name:'Scattered',field:[1200,750],dogs:[[600,700]],sheep:[...cluster(250,180,10,45,9),...cluster(950,170,10,45,10),...cluster(300,560,10,45,11)],pen:{x:1040,y:580,w:160,h:170,gate:'left'},par:{time:224,gold:160},limit:320},
+  {name:'Corner pen',field:[1100,700],dogs:[[60,650]],sheep:cluster(300,480,20,65,21),rocks:[[580,350,55],[800,520,40]],pen:{x:950,y:0,w:150,h:150,gate:'bottom'},par:{time:295,gold:211},limit:420},
+  {name:'Needle gap',field:[1100,680],dogs:[[60,340]],sheep:cluster(260,340,20,65,22),fences:[[580,0,580,290],[580,390,580,680]],pen:{x:960,y:270,w:140,h:140,gate:'left'},par:{time:49,gold:35},limit:90},
+  {name:'Turn back',field:[1000,620],dogs:[[950,580]],sheep:cluster(700,400,15,60,23),rocks:[[420,190,45],[420,450,45]],pen:{x:0,y:250,w:140,h:130,gate:'right'},par:{time:13,gold:9},limit:90},
+  {name:'Boulder field',field:[1300,780],dogs:[[60,390]],sheep:cluster(240,390,30,80,24),rocks:[[480,180,40],[480,600,40],[620,390,45],[780,200,40],[780,580,40],[920,390,35]],pen:{x:1140,y:310,w:160,h:160,gate:'left'},par:{time:105,gold:75},limit:150},
+  {name:'Ewes and lambs',tip:'Lambs are small, quick and skittish. Walk, do not sprint.',field:[1000,620],dogs:[[50,310]],sheep:[...cluster(270,310,12,50,51),...lambs(cluster(360,180,8,50,52))],pen:{x:860,y:240,w:140,h:140,gate:'left'},par:{time:36,gold:26},limit:90},
+  {name:'Split field',field:[1200,760],dogs:[[60,190]],sheep:[...cluster(300,190,15,60,25),...cluster(300,570,15,60,26)],fences:[[0,380,760,380]],pen:{x:1040,y:300,w:160,h:160,gate:'left'},par:{time:211,gold:151},limit:300},
+  {name:'Round the back',field:[1300,760],dogs:[[60,380]],sheep:cluster(260,380,25,70,27),fences:[[780,150,780,610]],pen:{x:980,y:300,w:160,h:160,gate:'right'},par:{time:242,gold:173},limit:340},
+  {name:'Pick a pen',tip:'Any pen will do. Ewes and lambs may share.',field:[1200,700],dogs:[[600,660]],sheep:[...cluster(600,330,15,70,53),...lambs(cluster(600,330,15,70,54))],rocks:[[600,110,45]],pens:[{x:0,y:0,w:160,h:160,gate:'right'},{x:1040,y:0,w:160,h:160,gate:'left'}],par:{time:39,gold:28},limit:90},
+  {name:'Middle pen',field:[1300,800],dogs:[[60,60]],sheep:[...cluster(200,640,15,55,28),...cluster(1100,160,15,55,29)],pen:{x:570,y:330,w:160,h:150,gate:'top'},par:{time:46,gold:33}},
+  {name:'Zigzag',field:[1300,760],dogs:[[60,620]],sheep:cluster(220,600,20,60,30),fences:[[440,200,440,760],[840,0,840,560]],pen:{x:1140,y:300,w:160,h:160,gate:'left'},par:{time:280,gold:200},limit:400},
+  {name:'Stampede',field:[1300,800],dogs:[[60,400]],sheep:cluster(400,400,70,150,31),pen:{x:1080,y:280,w:220,h:240,gate:'left',gateWidth:150},par:{time:59,gold:42},limit:90},
+  {name:'Both ways',tip:'Ewes to the ewe pen, lambs to the lamb pen. A sheep in the wrong pen does not count.',field:[1100,680],dogs:[[550,640]],sheep:[...cluster(380,200,10,50,55),...lambs(cluster(720,480,10,50,56))],fences:[[550,140,550,540]],
+    pens:[{x:0,y:270,w:150,h:140,gate:'right',kind:EWE},{x:950,y:270,w:150,h:140,gate:'left',kind:LAMB}],par:{time:15,gold:11},limit:90},
+  {name:'Funnel',field:[1300,780],dogs:[[60,390]],sheep:cluster(300,390,40,100,32),fences:[[620,0,860,320],[620,780,860,460]],rocks:[[160,170,35]],pen:{x:1100,y:290,w:200,h:200,gate:'left',gateWidth:140},par:{time:49,gold:35},limit:90},
+  {name:'Hill top',field:[1300,800],dogs:[[650,760]],sheep:[...cluster(220,620,15,55,33),...cluster(1080,620,15,55,34)],rocks:[[650,460,50]],pen:{x:560,y:0,w:180,h:150,gate:'bottom'},par:{time:169,gold:121},limit:240},
+  {name:'Lambs uphill',field:[1200,760],dogs:[[60,700]],sheep:[...cluster(350,600,15,65,57),...lambs(cluster(350,600,15,65,58))],rocks:[[450,380,45],[800,380,45]],pen:{x:510,y:0,w:180,h:150,gate:'bottom'},par:{time:59,gold:43}},
+  {name:'Three gaps',field:[1400,760],dogs:[[60,380]],sheep:cluster(220,380,25,65,35),fences:[[420,0,420,520],[700,240,700,760],[980,0,980,520]],pen:{x:1240,y:300,w:160,h:160,gate:'left'},par:{time:553,gold:395},limit:780},
+  {name:'Four corners',field:[1400,860],dogs:[[700,800]],sheep:[...cluster(160,150,10,45,36),...cluster(1240,150,10,45,37),...cluster(160,710,10,45,38),...cluster(1240,710,10,45,39)],pen:{x:610,y:340,w:180,h:170,gate:'top'},par:{time:251,gold:179},limit:360},
+  {name:'Market day',tip:'A lamb strayed in with the ewes, and a ewe in with the lambs.',field:[1300,760],dogs:[[60,380]],sheep:[...cluster(330,170,15,60,59),...lambs([[420,220]]),...lambs(cluster(330,590,15,60,60)),[420,540]],fences:[[200,380,900,380]],
+    pens:[{x:1130,y:0,w:170,h:170,gate:'left',kind:EWE},{x:1130,y:590,w:170,h:170,gate:'left',kind:LAMB}],par:{time:149,gold:106}},
+  {name:'Big round',field:[1400,800],dogs:[[60,200]],sheep:cluster(300,400,50,110,40),fences:[[800,140,800,660]],rocks:[[600,200,40],[600,600,40]],pen:{x:1000,y:300,w:200,h:200,gate:'right',gateWidth:140},par:{time:413,gold:295},limit:580},
+  {name:'Flock of eighty',field:[1600,900],dogs:[[60,450]],sheep:[...cluster(350,220,27,85,41),...cluster(350,680,27,85,42),...cluster(650,450,26,85,43)],rocks:[[1050,200,45],[1050,700,45]],pen:{x:1360,y:330,w:240,h:240,gate:'left',gateWidth:150},par:{time:370,gold:264},limit:520},
+  {name:'Shepherd’s test',tip:'Bark and the lambs run round behind the ewes. Use it to split the flock.',dogs:[[40,250]],sheep:[...cluster(220,250,10,70,65),...lambs(cluster(220,250,10,70,66))],
+    pens:[{x:670,y:0,w:130,h:140,gate:'bottom',kind:EWE},{x:670,y:360,w:130,h:140,gate:'top',kind:LAMB}],fences:[[460,0,460,170],[460,330,460,500]],par:{time:451,gold:322},limit:640},
+  {name:'Grand trial',field:[1600,900],dogs:[[60,450]],sheep:[...cluster(250,200,15,55,44),...cluster(250,700,15,55,45),...cluster(560,450,15,55,46)],fences:[[800,0,800,580],[1100,320,1100,900]],rocks:[[420,450,35]],pen:{x:1400,y:0,w:200,h:200,gate:'bottom',gateWidth:140},par:{time:479,gold:342},limit:680},
+  {name:'Woof!',tip:'Space or Bark: ewes huddle and stray lambs run back behind them.',field:[1100,680],dogs:[[60,340]],sheep:[...cluster(400,340,10,40,71),...lambs(cluster(400,340,10,170,72))],pen:{x:960,y:270,w:140,h:140,gate:'left'},par:{time:491,gold:351},limit:690},
+  {name:'The bridge',tip:'Sheep will not swim. Your dog will, slowly.',field:[1200,700],dogs:[[60,350]],sheep:cluster(280,350,30,80,73),water:[[560,0,80,300],[560,400,80,300]],bridges:[[560,300,80,100]],pen:{x:1040,y:270,w:160,h:160,gate:'left'},par:{time:69,gold:49},limit:100},
+  {name:'Mud flats',tip:'Mud slows everyone down. Go round, or push through.',field:[1300,800],dogs:[[60,740]],sheep:cluster(280,620,30,80,74),mud:[[420,80,280,260],[480,420,260,300],[850,260,180,280]],pen:{x:1120,y:0,w:180,h:170,gate:'bottom'},par:{time:118,gold:84},limit:170},
+  {name:'Hide and seek',tip:'Scared sheep hide in bushes. Walk, do not sprint, and go in close to flush them out.',field:[1300,800],dogs:[[60,400]],
+    sheep:[...cluster(380,180,6,30,75),...cluster(640,560,6,30,76),...cluster(330,660,6,30,77),...cluster(780,190,6,30,78)],bush:[[450,250,45],[700,480,50],[400,560,40],[860,280,42]],pen:{x:1140,y:320,w:160,h:160,gate:'left'},par:{time:245,gold:175},limit:350},
+  {name:'River crossing',tip:'Only the bridge crosses the river. Bark to call stray lambs back.',field:[1300,800],dogs:[[60,700]],sheep:[...cluster(350,640,15,60,79),...lambs(cluster(350,640,10,60,80))],
+    water:[[0,370,580,70],[720,370,580,70]],bridges:[[580,370,140,70]],pen:{x:1120,y:0,w:180,h:180,gate:'left'},par:{time:455,gold:325},limit:640},
+  {name:'Farm day',tip:'Everything at once. Walk, bark, and use the bridge.',field:[1500,900],dogs:[[60,450]],sheep:[...cluster(300,330,25,75,81),...lambs(cluster(300,580,20,75,82))],
+    water:[[960,0,70,380],[960,520,70,380]],bridges:[[960,380,70,140]],mud:[[500,80,220,180]],bush:[[560,720,50]],
+    pens:[{x:1300,y:0,w:200,h:200,gate:'bottom',kind:EWE},{x:1300,y:700,w:200,h:200,gate:'top',kind:LAMB}],par:{time:893,gold:638},limit:1260},
+  // 36-42: Open hill
+  {name:'Hill flock',tip:'Bigger than the screen. Tap the map to send your dog, or hold Q / E to circle the flock.',field:[1600,1000],dogs:[[800,940]],sheep:cluster(900,230,40,150,90),rocks:[[400,520,40],[1250,600,50]],bush:[[300,250,40]],pen:{x:0,y:780,w:220,h:220,gate:'right',gateWidth:140},par:{time:126,gold:90},limit:180},
+  {name:'The long fetch',tip:'Go wide round the flock, then bring it home at a walk.',field:[2400,1500],dogs:[[400,1420]],sheep:cluster(1900,300,50,220,91),rocks:[[1100,700,60],[1700,1000,45],[600,900,50]],bush:[[2100,700,45],[1300,300,40]],mud:[[900,1050,300,200]],pen:{x:0,y:1280,w:240,h:220,gate:'right',gateWidth:140},par:{time:272,gold:194},limit:390},
+  {name:'Through the gateway',field:[2000,1250],dogs:[[1000,560]],sheep:cluster(700,250,50,200,92),fences:[[0,620,900,620],[1100,620,2000,620]],rocks:[[1500,300,50],[500,950,45]],pen:{x:1780,y:1030,w:220,h:220,gate:'left',gateWidth:140},par:{time:146,gold:104},limit:210},
+  {name:'Down the lane',tip:'Funnel the flock into the lane and walk it all the way down.',field:[1400,2400],dogs:[[700,1000]],sheep:cluster(700,330,50,170,93),
+    fences:[[60,640,550,900],[1340,640,850,900],[550,900,550,2160],[850,900,850,2160]],rocks:[[300,250,45],[1100,420,50]],pen:{x:550,y:2160,w:300,h:240,gate:'top',gateWidth:160},par:{time:139,gold:99},limit:200},
+  {name:'The ford',tip:'Ewes with their lambs. Only the bridge crosses the river.',field:[2400,1400],dogs:[[1050,700]],sheep:[...cluster(500,700,30,150,94),...lambs(cluster(500,700,15,150,95))],
+    water:[[1150,0,110,600],[1150,800,110,600]],bridges:[[1150,600,110,200]],rocks:[[800,1000,50]],bush:[[1700,400,45],[1900,1050,40]],pen:{x:2170,y:580,w:230,h:240,gate:'left',gateWidth:140},par:{time:627,gold:448},limit:880},
+  {name:'The gather',tip:'Five bunches on the hill. Gather them, then bring them home.',field:[2400,1500],dogs:[[900,1440]],
+    sheep:[...cluster(300,250,10,60,96),...cluster(1200,180,10,60,97),...cluster(2100,280,10,60,98),...cluster(450,900,10,60,99),...cluster(1950,950,10,60,100)],rocks:[[800,550,55],[1600,600,55]],bush:[[1200,700,45]],pen:{x:1090,y:1280,w:220,h:220,gate:'top',gateWidth:140},par:{time:307,gold:219},limit:430},
+  {name:'Shedding',tip:'Forty mixed. Bark to split the lambs off, then pen each kind.',field:[1800,1100],dogs:[[200,550]],sheep:[...cluster(900,550,24,110,101),...lambs(cluster(900,550,16,110,102))],
+    pens:[{x:0,y:0,w:220,h:220,gate:'right',gateWidth:140,kind:EWE},{x:1580,y:880,w:220,h:220,gate:'left',gateWidth:140,kind:LAMB}],rocks:[[900,200,50],[900,900,50]],par:{time:694,gold:496},limit:980},
+  // 43-49: Big country, flocks of a hundred and more
+  {name:'Hundred head',tip:'A hundred sheep. Keep them together and they move as one.',field:[2000,1300],dogs:[[1000,1250]],sheep:cluster(1000,330,100,210,110),rocks:[[500,700,55],[1500,750,60]],bush:[[1000,720,50]],pen:{x:0,y:1000,w:300,h:300,gate:'right',gateWidth:160},par:{time:291,gold:208},limit:410},
+  {name:'The quarry',blocker:[1100,980],tip:'The old quarry is a dead end. Bring dog 2 over and park it in the mouth.',field:[2200,1400],dogs:[[150,1300],[2100,100]],sheep:cluster(500,350,120,230,111),
+    fences:[[900,1000,900,1400],[1300,1000,1300,1400],[900,1000,1020,1000],[1180,1000,1300,1000]],rocks:[[1600,500,55]],pen:{x:1900,y:1100,w:300,h:300,gate:'left',gateWidth:160},par:{time:300,gold:200}},
+  {name:'Wrong gate',blocker:[1200,575],tip:'Two gateways side by side. The top one leads nowhere: block it with dog 2.',field:[2400,1400],dogs:[[100,700],[1100,100]],sheep:cluster(500,700,100,210,112),
+    fences:[[1200,0,1200,460],[1200,690,1200,710],[1200,960,1200,1400],[1200,700,2400,700]],pen:{x:2100,y:1100,w:300,h:300,gate:'left',gateWidth:160},par:{time:300,gold:200}},
+  {name:'The moor',tip:'A hundred and fifty sheep in six bunches across the moor.',field:[2800,1700],dogs:[[1000,1650]],
+    sheep:[...cluster(300,300,25,90,113),...cluster(1400,250,25,90,114),...cluster(2500,300,25,90,115),...cluster(400,1000,25,90,116),...cluster(2400,1050,25,90,117),...cluster(1400,800,25,90,118)],
+    rocks:[[900,600,60],[1900,600,60],[800,1350,50],[2000,1350,50]],bush:[[1400,500,50],[600,700,45],[2200,700,45]],mud:[[1000,1000,300,200],[1600,1100,260,180]],pen:{x:1240,y:1380,w:320,h:320,gate:'top',gateWidth:170},par:{time:300,gold:200}},
+  {name:'Shearing day',tip:'Ewes to the shearing pen, lambs to the nursery. Bark to split them.',field:[2000,1200],dogs:[[1000,1150]],sheep:[...cluster(1000,550,80,200,119),...lambs(cluster(1000,550,50,200,120))],
+    pens:[{x:0,y:0,w:300,h:300,gate:'right',gateWidth:160,kind:EWE},{x:1700,y:900,w:300,h:300,gate:'left',gateWidth:160,kind:LAMB}],rocks:[[1000,150,55],[1000,1000,55]],par:{time:300,gold:200}},
+  {name:'Sea cliffs',tip:'Sheep will not go near the sea. Use the shore as your second dog.',field:[2400,1400],dogs:[[300,1050]],sheep:cluster(600,500,120,220,121),water:[[0,1150,2400,250]],rocks:[[1300,500,60],[1700,850,50]],bush:[[1000,950,45]],
+    pen:{x:2100,y:0,w:300,h:300,gate:'bottom',gateWidth:160},par:{time:459,gold:328},limit:650},
+  {name:'The big drive',tip:'A hundred and fifty, from one end of the valley to the other.',field:[3200,1300],dogs:[[60,650]],sheep:cluster(500,650,150,260,122),
+    water:[[1500,0,100,550],[1500,750,100,550]],bridges:[[1500,550,100,200]],mud:[[2200,300,300,400]],bush:[[800,300,50],[900,1000,50],[2600,1000,50]],pen:{x:2880,y:490,w:320,h:320,gate:'left',gateWidth:170},par:{time:617,gold:441},limit:870},
+  // 50-53: All weathers. weather (night, fog, snow) only changes what you see; a storm's thunder also spooks the flock.
+  {name:'Night shift',tip:'Lambing at night. Your dog carries the only light; the pen has a lantern.',weather:'night',field:[1600,1000],dogs:[[120,900]],sheep:[...cluster(1100,320,45,150,130),...lambs(cluster(1100,320,15,150,135))],
+    rocks:[[700,520,50]],bush:[[400,300,45],[1300,720,45]],pen:{x:0,y:0,w:240,h:240,gate:'right',gateWidth:150},par:{time:300,gold:200}},
+  {name:'Fog on the fell',tip:'Fog rolls over the hill. Keep the flock in sight, and trust the map.',weather:'fog',field:[2000,1300],dogs:[[1000,1000]],sheep:[...cluster(400,300,40,120,131),...cluster(1600,350,40,120,132)],
+    rocks:[[1000,560,60],[600,880,45],[1400,880,45]],pen:{x:850,y:1060,w:300,h:240,gate:'top',gateWidth:160},par:{time:300,gold:200}},
+  {name:'First snow',tip:'A hundred sheep in fresh snow, every one of them leaving tracks.',weather:'snow',field:[1800,1100],dogs:[[120,1000]],sheep:cluster(1300,420,100,200,133),
+    rocks:[[1000,800,55]],bush:[[900,300,50],[600,750,45]],pen:{x:0,y:0,w:280,h:280,gate:'bottom',gateWidth:160},par:{time:300,gold:200}},
+  {name:'Storm',tip:'Every clap of thunder spooks the flock. Keep them moving, over the bridge and home.',weather:'storm',field:[2200,1300],dogs:[[700,1250]],sheep:cluster(1100,300,120,220,134),
+    water:[[0,620,900,80],[1300,620,900,80]],bridges:[[900,620,400,80]],pen:{x:950,y:1000,w:300,h:300,gate:'top',gateWidth:170},par:{time:300,gold:200}},
+  // 54-56: Wolf country. A wolf comes out of the woods now and then; run at it or bark and it bolts.
+  {name:'Wolf at the door',tip:'A wolf lives in the woods. Run your dog at it, or bark, and it bolts.',field:[1600,1000],dogs:[[300,900]],sheep:cluster(700,350,40,140,140),
+    wolf:{den:[1600,150],at:12,every:40},rocks:[[1100,600,50]],pen:{x:0,y:760,w:240,h:240,gate:'right',gateWidth:150},par:{time:300,gold:200}},
+  {name:'The long night',tip:'Night, lambs, and a wolf. Keep your light between them.',weather:'night',field:[2000,1300],dogs:[[1000,1000]],sheep:[...cluster(1000,400,60,180,141),...lambs(cluster(1000,400,20,180,142))],
+    wolf:{den:[0,300],at:20,every:35},bush:[[500,700,50],[1500,700,50]],pen:{x:850,y:1060,w:300,h:240,gate:'top',gateWidth:160},par:{time:300,gold:200}},
+  {name:'Pack country',tip:'A hundred and twenty sheep, and the wolf keeps coming back.',field:[2400,1500],dogs:[[800,1440]],sheep:cluster(1200,500,120,230,143),
+    wolf:{den:[2400,700],at:10,every:25},rocks:[[700,900,60],[1700,900,60]],pen:{x:1050,y:1180,w:300,h:320,gate:'top',gateWidth:170},par:{time:300,gold:200}},
 ];
 
 // Levels grouped into farms, in play order. The numbers index LEVELS, which keeps its order so that
@@ -245,6 +305,9 @@ const FARMS=[
   {name:'Wet ground',levels:[31,32,33,34]},
   {name:'Sorting day',levels:[19,25,28,35]},
   {name:'Open hill',levels:[36,37,38,39,40,41,42]},
+  {name:'Big country',levels:[43,44,45,46,47,48,49]},
+  {name:'All weathers',levels:[50,51,52,53]},
+  {name:'Wolf country',levels:[54,55,56]},
 ];
 const ORDER=FARMS.flatMap(farm=>farm.levels);
 
@@ -298,7 +361,9 @@ function makeWorld(level){
     }[P.gate];
     // the back of the pen, opposite the gate: penned sheep drift there and leave the gateway free
     const [backX,backY]={left:[P.x+P.w-25,cy],top:[cx,P.y+P.h-25],bottom:[cx,P.y+25],right:[P.x+25,cy]}[P.gate];
-    return {...P,insideX,insideY,outsideX,outsideY,backX,backY,shut:false};
+    // the gate's middle and its outward direction: only sheep in front of the gate feel its pull
+    const [gateX,gateY,outX,outY]={left:[P.x,cy,-1,0],top:[cx,P.y,0,-1],bottom:[cx,P.y+P.h,0,1],right:[P.x+P.w,cy,1,0]}[P.gate];
+    return {...P,insideX,insideY,outsideX,outsideY,backX,backY,gateX,gateY,outX,outY,shut:false};
   });
   // terrain: water (sheep cannot enter, dogs swim slowly), mud (everyone slow), bushes (scared sheep hide in them)
   const water=level.water||[];
@@ -318,6 +383,7 @@ function bark(world,dogIndex){
   const dog=world.dogs[dogIndex];
   if(!dog||dog.barkCooldown>0)return false;
   dog.barkCooldown=BARK_COOLDOWN;
+  if(world.wolf&&Math.hypot(world.wolf.x-dog.x,world.wolf.y-dog.y)<BARK_RADIUS*1.5)scareWolf(world);
   for(const s of world.sheep){
     if(s.penned||Math.hypot(s.x-dog.x,s.y-dog.y)>BARK_RADIUS)continue;
     if(s.kind!==LAMB){s.huddleTime=1.4;s.fear=Math.max(s.fear,.5);continue;}
@@ -350,6 +416,7 @@ function collide(world,body,edge=SHEEP_EDGE){
     }
   }
   for(const [x1,y1,x2,y2] of world.walls){
+    if(body.x<Math.min(x1,x2)-r-1||body.x>Math.max(x1,x2)+r+1||body.y<Math.min(y1,y2)-r-1||body.y>Math.max(y1,y2)+r+1)continue;
     const ex=x2-x1,ey=y2-y1,u=clamp(((body.x-x1)*ex+(body.y-y1)*ey)/(ex*ex+ey*ey),0,1);
     const qx=x1+ex*u,qy=y1+ey*u,dx=body.x-qx,dy=body.y-qy,d=Math.hypot(dx,dy)||1e-3;
     if(d<r+1){
@@ -390,11 +457,11 @@ function moveDog(world,dog,dt){
 //   3. an always-on slow drift away from the dogs, and a slight pull toward mid-field (centrePull)
 // On top of that come a few direct pushes: personal space, bushes, pen gates, grazing, walls.
 
-// How the dogs make this sheep feel. Adds the "too close, shove away" push straight into acc.
+// How the dogs (and a wolf) make this sheep feel. Adds the "too close, shove away" push straight into acc.
 function senseDogs(world,s,acc){
   const boost=s.kind===LAMB?LAMB_BOOST:1,hidden=inBush(world,s);
   let fleeX=0,fleeY=0,awayX=0,awayY=0,fear=0,panic=0;
-  for(const dog of world.dogs){
+  for(const dog of world.threats){ // the dogs, and a wolf while it is about
     const ex=s.x-dog.x,ey=s.y-dog.y,dist=Math.hypot(ex,ey)||1,range=dog.range*boost;
     awayX+=ex/(dist*dist);awayY+=ey/(dist*dist); // which way is "away from the dogs", nearer dogs count more
     if(dist<45){const q=1-dist/45;acc.x+=ex/dist*2600*q*q;acc.y+=ey/dist*2600*q*q;}
@@ -413,11 +480,30 @@ function senseDogs(world,s,acc){
   return {fleeX,fleeY,awayX:len?awayX/len:0,awayY:len?awayY/len:0,fear,panic};
 }
 
+// A grid of the sheep, rebuilt every step, so a sheep only looks at the nine cells around it.
+// A cell is wider than any sheep's sight, plus what a sheep can move in one step.
+const CELL=96;
+function buildGrid(world){
+  const cols=Math.ceil(world.W/CELL),rows=Math.ceil(world.H/CELL);
+  const cells=Array.from({length:cols*rows},()=>[]);
+  for(const s of world.sheep)cells[clamp(s.y/CELL|0,0,rows-1)*cols+clamp(s.x/CELL|0,0,cols-1)].push(s);
+  world.grid={cols,rows,cells};
+}
+// the sheep in the nine cells around s, gathered into one reused list
+const nearby=[];
+function nearbySheep(world,s){
+  const {cols,rows,cells}=world.grid,ci=clamp(s.x/CELL|0,0,cols-1),cj=clamp(s.y/CELL|0,0,rows-1);
+  nearby.length=0;
+  for(let j=Math.max(0,cj-1);j<=Math.min(rows-1,cj+1);j++)
+    for(let i=Math.max(0,ci-1);i<=Math.min(cols-1,ci+1);i++){const cell=cells[j*cols+i];for(let k=0;k<cell.length;k++)nearby.push(cell[k]);}
+  return nearby;
+}
+
 // Neighbours within sight: their centre, mean velocity and highest fear. Adds personal-space pushes into acc.
 function senseFlock(world,s,acc){
   const isLamb=s.kind===LAMB,sight=isLamb?60:90;
   let count=0,cx=0,cy=0,vx=0,vy=0,maxFear=0;
-  for(const o of world.sheep){
+  for(const o of nearbySheep(world,s)){
     if(o===s||o.penned!==s.penned)continue;
     const ex=s.x-o.x,ey=s.y-o.y;
     if(ex>sight||ex<-sight||ey>sight||ey<-sight)continue; // out of sight: skip the square root (big flocks)
@@ -494,7 +580,8 @@ function steerOffWalls(world,s,acc){
   let nx=0,ny=0;
   const repel=(dx,dy,dist,margin)=>{if(dist<margin){const k=1-Math.max(0,dist)/margin;nx+=dx*k;ny+=dy*k;}};
   repel(1,0,s.x,38);repel(-1,0,world.W-s.x,38);repel(0,1,s.y,38);repel(0,-1,world.H-s.y,38);
-  for(const [x1,y1,x2,y2] of [...world.walls,...world.waterEdges]){
+  for(const [x1,y1,x2,y2] of world.walls.concat(world.waterEdges)){
+    if(s.x<Math.min(x1,x2)-34||s.x>Math.max(x1,x2)+34||s.y<Math.min(y1,y2)-34||s.y>Math.max(y1,y2)+34)continue; // beyond the 26 margin
     const ex=x2-x1,ey=y2-y1,u=clamp(((s.x-x1)*ex+(s.y-y1)*ey)/(ex*ex+ey*ey),0,1);
     const dx=s.x-x1-ex*u,dy=s.y-y1-ey*u,d=Math.hypot(dx,dy)||1;
     repel(dx/d,dy/d,d-8,26);
@@ -517,7 +604,7 @@ function steerOffWalls(world,s,acc){
 // A sheep may never overlap a dog. If it is pinned between a dog and a wall it squeezes round the dog's side.
 function keepOffDogs(world,s,dt){
   const reach=bodyRadius(s)+DOG_RADIUS;
-  for(const dog of world.dogs){
+  for(const dog of world.threats){
     const ex=s.x-dog.x,ey=s.y-dog.y,dist=Math.hypot(ex,ey);
     if(dist>=reach)continue;
     const ux=dist>1e-3?ex/dist:Math.cos(s.heading),uy=dist>1e-3?ey/dist:Math.sin(s.heading);
@@ -540,10 +627,10 @@ function checkPens(world,s){
   const P=world.pens.find(P=>insidePen(P,s,fitsPen(P,s)?9:0)); // the wrong kind counts as inside even against the wall
   if(P&&fitsPen(P,s)){
     s.penned=P;s.wrongPen=null;s.fear=0;world.penned++;
-    world.events.push({type:'pen',x:s.x,y:s.y});
+    world.events.push({type:'pen',x:s.x,y:s.y,sheep:s});
     return;
   }
-  if(P&&P!==s.wrongPen)world.events.push({type:'wrong',x:s.x,y:s.y});
+  if(P&&P!==s.wrongPen)world.events.push({type:'wrong',x:s.x,y:s.y,sheep:s});
   s.wrongPen=P||null;
 }
 
@@ -576,7 +663,7 @@ function moveSheep(world,s,dt){
   const flock=senseFlock(world,s,acc);
   const calmDown=dt*(isLamb?.9:.6)*(hidden?3:1),wasFear=s.fear;
   s.fear=Math.max(dogs.fear,flock.maxFear*(isLamb?.45:.7)*(1-.4*s.panic),s.fear-calmDown);
-  if(free&&s.fear>.55&&wasFear<=.55)world.events.push({type:'bleat',kind:s.kind});
+  if(free&&s.fear>.55&&wasFear<=.55)world.events.push({type:'bleat',kind:s.kind,sheep:s});
 
   // desired velocity, in priority order
   let wantX=dogs.fleeX+dogs.awayX*3,wantY=dogs.fleeY+dogs.awayY*3; // 1 flee, 3 slow drift away
@@ -604,6 +691,8 @@ function moveSheep(world,s,dt){
   }
   if(free)for(const P of world.pens){ // drawn in through the gate of a pen that takes it
     if(P.shut||!fitsPen(P,s))continue;
+    const ahead=(s.x-P.gateX)*P.outX+(s.y-P.gateY)*P.outY; // how far out in front of the gate line
+    if(ahead<-4&&!insidePen(P,s,0))continue; // beside or behind the pen: not pulled against its walls
     const dx=P.insideX-s.x,dy=P.insideY-s.y,dist=Math.hypot(dx,dy)||1;
     if(dist<140){const k=1-dist/140;acc.x+=dx/dist*160*k;acc.y+=dy/dist*160*k;}
   }
@@ -636,13 +725,67 @@ function moveSheep(world,s,dt){
   if(s.penned){const P=s.penned;s.x=clamp(s.x,P.x+10,P.x+P.w-10);s.y=clamp(s.y,P.y+10,P.y+P.h-10);}
 }
 
+// Storm levels: every 18-32 s a clap of thunder frightens every free sheep at once.
+function thunder(world){
+  if(world.level.weather!=='storm')return;
+  world.nextThunder??=12;
+  if(world.t<world.nextThunder)return;
+  world.nextThunder+=18+world.random()*14;
+  for(const s of world.sheep)if(!s.penned){s.fear=Math.max(s.fear,.7);s.panic=Math.max(s.panic,.6);}
+  world.events.push({type:'thunder'});
+}
+
+// Wolf levels: level.wolf = {den:[x,y] on the field edge, at: first visit (s), every: s between visits}.
+// The wolf slinks toward the nearest sheep and scatters the flock (sheep fear it like a sprinting dog, from
+// further off); a dog coming within WOLF_SHY, or a bark in range, sends it bolting back to its den.
+const WOLF_RANGE=190,WOLF_SHY=140,WOLF_HUNT=105,WOLF_FLEE=210;
+function moveWolf(world,dt){
+  const plan=world.level.wolf;
+  if(!plan)return;
+  const w=world.wolf??={x:plan.den[0],y:plan.den[1],vx:0,vy:0,heading:0,range:WOLF_RANGE,sprint:1,state:'away',back:plan.at};
+  if(w.state==='away'){
+    if(world.t<w.back)return;
+    Object.assign(w,{state:'hunt',x:plan.den[0],y:plan.den[1],vx:0,vy:0});
+    world.events.push({type:'howl'});
+  }
+  let nearDog=Infinity,dog=null;
+  for(const d of world.dogs){const dist=Math.hypot(d.x-w.x,d.y-w.y);if(dist<nearDog){nearDog=dist;dog=d;}}
+  if(w.state==='hunt'&&nearDog<WOLF_SHY)scareWolf(world);
+  let tx,ty,speed;
+  if(w.state==='hunt'){
+    let prey=null,best=Infinity;
+    for(const s of world.sheep)if(!s.penned){const d=Math.hypot(s.x-w.x,s.y-w.y);if(d<best){best=d;prey=s;}}
+    if(!prey)return scareWolf(world);
+    [tx,ty,speed]=[prey.x,prey.y,WOLF_HUNT];
+  }else{ // bolting home, veering away from the dog that chased it
+    const hx=plan.den[0]-w.x,hy=plan.den[1]-w.y,home=Math.hypot(hx,hy)||1;
+    if(home<20){w.state='away';w.back=world.t+plan.every*(.8+.4*world.random());return;}
+    const ax=dog?(w.x-dog.x)/(nearDog||1):0,ay=dog?(w.y-dog.y)/(nearDog||1):0,away=nearDog<WOLF_SHY*1.5?.8:0;
+    [tx,ty,speed]=[w.x+hx/home*100+ax*100*away,w.y+hy/home*100+ay*100*away,WOLF_FLEE];
+  }
+  const dx=tx-w.x,dy=ty-w.y,dist=Math.hypot(dx,dy)||1,k=Math.min(1,dt*4);
+  w.vx+=(dx/dist*speed-w.vx)*k;w.vy+=(dy/dist*speed-w.vy)*k;
+  w.x+=w.vx*dt;w.y+=w.vy*dt;
+  if(Math.hypot(w.vx,w.vy)>5)w.heading=Math.atan2(w.vy,w.vx);
+  collide(world,w,4);
+}
+function scareWolf(world){
+  const w=world.wolf;
+  if(!w||w.state!=='hunt')return;
+  w.state='flee';world.events.push({type:'wolfFlee'});
+}
+
 function step(world,dt){
   world.t+=dt;
+  thunder(world);
+  moveWolf(world,dt);
+  world.threats=world.wolf&&world.wolf.state!=='away'?[...world.dogs,world.wolf]:world.dogs;
+  buildGrid(world);
   for(const dog of world.dogs)moveDog(world,dog,dt);
   for(const s of world.sheep)moveSheep(world,s,dt);
   shutGates(world);
 }
-if(typeof module!=='undefined')module.exports={LEVELS,FARMS,ORDER,makeWorld,step,bark,gateOpening,DT,LIMIT,cluster,rng,RMIN,DOG_WALK,DOG_MAX,EWE,LAMB};
+if(typeof module!=='undefined')module.exports={LEVELS,FARMS,ORDER,makeWorld,step,bark,scareWolf,gateOpening,DT,LIMIT,cluster,rng,RMIN,DOG_WALK,DOG_MAX,EWE,LAMB};
 </script>
 
 <script>
@@ -655,6 +798,7 @@ const $=sel=>document.querySelector(sel);
 const canvas=$('#field'),ctx=canvas.getContext('2d'),DPR=Math.min(2,window.devicePixelRatio||1);
 canvas.width=FIELD_W*DPR;canvas.height=FIELD_H*DPR;
 const reducedMotion=matchMedia('(prefers-reduced-motion: reduce)').matches;
+const nowS=()=>performance.now()/1000; // real time in seconds, the clock every effect runs on
 
 let levelIndex=0,level,world,selected=0;
 let mode='ready';      // ready -> play (<-> paused) -> closing -> done
@@ -663,9 +807,13 @@ let popups=[],barkRings=[],grass=[],dust=[];
 let endTime=0,closingUntil=0; // the winning time, and when the slow-motion gate close hands over to the results
 let gateShut=new Map();        // pen -> real time (s) its gate began to swing shut
 let pointerHeld=false,pointer=null,pointerScreen=null,shift=false; // pointer: in the field, pointerScreen: on the canvas
-// The view: a big field is seen zoomed out a little, through a camera that follows the selected dog.
+// The view: a field is zoomed out until it fits, but no further than MIN_ZOOM; a field still too big
+// for that is seen through a camera that follows the selected dog, with a map in the corner.
+const MIN_ZOOM=.6,MARGIN=36; // MARGIN: field px shown past each edge, so the wall and trees frame the field
 let cam={x:0,y:0},zoom=1;
-const bigField=()=>world.open;
+const bigField=()=>(world.W+2*MARGIN)*zoom>FIELD_W+1||(world.H+2*MARGIN)*zoom>FIELD_H+1;
+// the camera's top-left corner range along one axis; a field narrower than the view sits in the middle
+const camRange=(size,view)=>size+2*MARGIN>view?[-MARGIN,size+MARGIN-view]:[(size-view)/2,(size-view)/2];
 const keys=new Set();
 
 let stars={};
@@ -712,10 +860,21 @@ function penChime(t){ // each sheep penned soon after the last one sounds a step
 const wrongBuzz=()=>{tone(233,{length:.12,volume:.07,type:'square',endFreq:200});tone(196,{delay:.09,length:.18,volume:.07,type:'square',endFreq:160});};
 const gateThud=delay=>{tone(150,{delay,length:.2,volume:.4,type:'sine',endFreq:55});tone(440,{delay,length:.05,volume:.1,endFreq:220});};
 const fanfare=()=>[523,659,784,1047].forEach((f,i)=>tone(f,{delay:i*.1,length:i<3?.25:.6,volume:.14}));
+const tinkle=speed=>{ // the bellwether's bell, louder the faster she goes
+  const v=Math.min(.05,.012+speed/5000),f=1960+Math.random()*80;
+  tone(f,{length:.35,volume:v,type:'sine'});tone(f*2.76,{length:.12,volume:v*.4,type:'sine'});
+};
+let lastCaw=0;
+function caw(){ // a crow startled into the air: two rough, falling squawks, now and then
+  const t=nowS();
+  if(t-lastCaw<1.2)return;
+  lastCaw=t;
+  for(const delay of [0,.17]){tone(780,{delay,length:.12,volume:.035,type:'sawtooth',endFreq:420});tone(1170,{delay,length:.08,volume:.02,type:'square',endFreq:700});}
+}
 const timeUp=()=>[392,330,262].forEach((f,i)=>tone(f,{delay:i*.16,length:.3,volume:.12}));
 let lastBleat=0,nextIdleBleat=3,lastVoice=[1,1];
 function bleat(kind,volume){
-  const t=performance.now()/1000;
+  const t=nowS();
   if(t-lastBleat<.28)return; // a scared flock bleats a few times, not once per sheep
   lastBleat=t;
   const voice=Math.random()<.7?3-lastVoice[kind]:lastVoice[kind]; // mostly alternate the two voices
@@ -763,21 +922,28 @@ function saveMyGhost(time){
 function toggleGhost(){ghostOn=!ghostOn;$('#bGhost').classList.toggle('off',!ghostOn);}
 
 /* ---------- level and dog pickers, results ---------- */
+// One farm at a time: arrows step through the farms, its levels sit beside it.
+let shownFarm=0;
 function buildLevels(){
   const el=$('#levels');el.innerHTML='';
-  let number=0;
-  for(const farm of FARMS){
-    const group=document.createElement('div'),row=document.createElement('div');
-    group.className='farm';group.append(Object.assign(document.createElement('span'),{textContent:farm.name}),row);
-    for(const i of farm.levels){
-      const b=document.createElement('button'),got=stars[i]||0;
-      b.className='lv'+(i==levelIndex?' cur':'');
-      b.innerHTML=`<b>${++number}</b><small>${'★'.repeat(got)}${'·'.repeat(3-got)}</small>`;
-      b.title=LEVELS[i].name;b.onclick=()=>load(i);
-      row.appendChild(b);
-    }
-    el.appendChild(group);
-  }
+  const farm=FARMS[shownFarm],first=FARMS.slice(0,shownFarm).reduce((n,f)=>n+f.levels.length,0);
+  const earned=farm.levels.reduce((sum,i)=>sum+(stars[i]||0),0);
+  const nav=document.createElement('div');nav.className='farmnav';
+  const arrow=(text,step,label)=>{const b=document.createElement('button');b.textContent=text;b.title=label;b.setAttribute('aria-label',label);
+    b.disabled=!FARMS[shownFarm+step];b.onclick=()=>{shownFarm+=step;buildLevels();};return b;};
+  const name=document.createElement('div');name.className='farmname';
+  name.innerHTML=`<span>Farm ${shownFarm+1} of ${FARMS.length}</span><b></b><small>★ ${earned}/${farm.levels.length*3}</small>`;
+  name.querySelector('b').textContent=farm.name;
+  nav.append(arrow('◀',-1,'Previous farm'),name,arrow('▶',1,'Next farm'));
+  const row=document.createElement('div');row.className='farmlevels';
+  farm.levels.forEach((i,k)=>{
+    const b=document.createElement('button'),got=stars[i]||0;
+    b.className='lv'+(i==levelIndex?' cur':'');
+    b.innerHTML=`<b>${first+k+1}</b><small>${'★'.repeat(got)}${'·'.repeat(3-got)}</small>`;
+    b.title=LEVELS[i].name;b.onclick=()=>load(i);
+    row.appendChild(b);
+  });
+  el.append(nav,row);
   const total=ORDER.reduce((sum,i)=>sum+(stars[i]||0),0);
   $('#starTotal').textContent=`★ ${total}/${ORDER.length*3}`;
 }
@@ -795,6 +961,7 @@ function buildDogs(){
 function pickDog(i){if(i===selected||i>=level.dogs.length)return;selected=i;buildDogs();}
 function load(i){
   levelIndex=i;level=LEVELS[i];selected=0;
+  shownFarm=FARMS.findIndex(f=>f.levels.includes(i));
   const random=(()=>{let s=i*977+13;return()=>{s=(s*16807)%2147483647;return s/2147483647;};})();
   // tufts of grass, and now and then a flower
   const [W,H]=level.field||[FIELD_W,FIELD_H];
@@ -808,7 +975,9 @@ function load(i){
 }
 function reset(){
   world=makeWorld(level);mode='ready';timeBank=0;tutorialStep=0;popups=[];dust=[];pointerHeld=false;gateShut=new Map();
-  zoom=bigField()?.8:1;followCamera(1,true);
+  zoom=clamp(Math.min(FIELD_W/(world.W+2*MARGIN),FIELD_H/(world.H+2*MARGIN)),MIN_ZOOM,1);followCamera(1,true);
+  winAt=null;dressLevel();runStats={run:0,barks:0,faints:0,said:0};
+  banner=nowS();
   run=world.dogs.map(()=>[]);recordRun();
   $('#ov').hidden=true;
 }
@@ -827,6 +996,7 @@ function finish(win){
   const best=myGhosts[levelIndex]?.time;
   if(win){fanfare();saveMyGhost(t);}else timeUp();
   $('#ovBest').textContent=!win?'':best===undefined||t<best?'New best!':`Best ${best.toFixed(1)} s`;
+  $('#ovFun').textContent=funLine(win);
   const goals=[
     [win,sorting?'Every sheep in its own pen':'Every sheep penned',`${world.penned}/${world.sheep.length}`],
     [win&&t<=par.time,`Under ${par.time} s`,`${t.toFixed(1)} s`],
@@ -842,6 +1012,16 @@ function finish(win){
   $('#boardOpen').hidden=!win||!BOARD.url;
   $('#board').hidden=true;
   $('#ov').hidden=false;
+}
+
+// A line of nonsense for the results card, made from what happened in this run.
+function funLine(win){
+  const metres=runStats.run/10,bits=[`Your dog ran ${metres<1000?Math.round(metres)+' m':(metres/1000).toFixed(1)+' km'}`];
+  if(runStats.barks)bits.push(`barked ${runStats.barks===1?'once':runStats.barks+' times'}`);
+  if(runStats.faints)bits.push(`made ${runStats.faints===1?'a sheep':runStats.faints+' sheep'} faint`);
+  let line=bits.length>1?bits.slice(0,-1).join(', ')+' and '+bits.at(-1):bits[0];
+  if(runStats.said>3)line+=`. The flock had ${runStats.said} things to say about it`;
+  return line+(win?'.':'. The sheep are still out there.');
 }
 
 /* ---------- online leaderboard: a Supabase table (see leaderboard.sql), best time per name per level ---------- */
@@ -912,7 +1092,7 @@ const toField=([sx,sy])=>[clamp(cam.x+sx/zoom,DOG_EDGE,world.W-DOG_EDGE),clamp(c
 // Centre the view on the selected dog, easing after it (snap: jump there), never past the field edge.
 function followCamera(dt,snap){
   const dog=world.dogs[selected],k=snap?1:1-Math.exp(-5*dt);
-  const tx=clamp(dog.x-FIELD_W/zoom/2,0,world.W-FIELD_W/zoom),ty=clamp(dog.y-FIELD_H/zoom/2,0,world.H-FIELD_H/zoom);
+  const tx=clamp(dog.x-FIELD_W/zoom/2,...camRange(world.W,FIELD_W/zoom)),ty=clamp(dog.y-FIELD_H/zoom/2,...camRange(world.H,FIELD_H/zoom));
   cam.x+=(tx-cam.x)*k;cam.y+=(ty-cam.y)*k;
 }
 const playing=()=>mode==='ready'||mode==='play';
@@ -935,6 +1115,31 @@ const release=()=>{pointerHeld=false;};
 canvas.addEventListener('pointerup',release);
 canvas.addEventListener('pointercancel',release);
 
+// The shepherd's whistles: hold Q (come bye) or E (away to me) and the dog runs round the flock,
+// clockwise or anticlockwise, at the distance it is now (never closer than FLANK_MIN).
+const WHISTLES={q:1,e:-1},FLANK_MIN=110;
+let whistleHeld=0; // a whistle held on the on-screen buttons: 1 come bye, -1 away
+function whistleTone(dir){ // a rising (come bye) or falling (away) two-note whistle
+  const [a,b]=dir>0?[1800,2600]:[2600,1800];
+  tone(a,{length:.16,volume:.05,type:'sine',endFreq:b});tone(b,{delay:.18,length:.14,volume:.04,type:'sine',endFreq:a});
+}
+// the bunch of free sheep nearest the dog: everything within 250 px of the nearest free sheep, in a growing chain
+function nearestBunch(dog){
+  const free=world.sheep.filter(s=>!s.penned);
+  if(!free.length)return null;
+  let first=free[0],best=Infinity;
+  for(const s of free){const d=Math.hypot(s.x-dog.x,s.y-dog.y);if(d<best){best=d;first=s;}}
+  const bunch=[first],seen=new Set(bunch);
+  for(let k=0;k<bunch.length;k++)for(const s of free)if(!seen.has(s)&&Math.hypot(s.x-bunch[k].x,s.y-bunch[k].y)<60){seen.add(s);bunch.push(s);}
+  return {x:bunch.reduce((a,s)=>a+s.x,0)/bunch.length,y:bunch.reduce((a,s)=>a+s.y,0)/bunch.length,size:bunch.length};
+}
+function flankTarget(dog,dir){
+  const c=nearestBunch(dog);
+  if(!c)return null;
+  const r=Math.max(FLANK_MIN+Math.sqrt(c.size)*6,Math.hypot(dog.x-c.x,dog.y-c.y)),a=Math.atan2(dog.y-c.y,dog.x-c.x)+dir*Math.min(.6,90/r);
+  return [clamp(c.x+Math.cos(a)*r,DOG_EDGE,world.W-DOG_EDGE),clamp(c.y+Math.sin(a)*r,DOG_EDGE,world.H-DOG_EDGE)];
+}
+
 const MOVE_KEYS={ArrowUp:[0,-1],ArrowDown:[0,1],ArrowLeft:[-1,0],ArrowRight:[1,0],w:[0,-1],s:[0,1],a:[-1,0],d:[1,0]};
 const keyName=e=>e.key.length===1?e.key.toLowerCase():e.key;
 addEventListener('contextmenu',e=>{if(e.target.tagName==='INPUT')return;e.preventDefault();nextDog();});
@@ -943,8 +1148,13 @@ function doBark(){
   start();
   const dog=world.dogs[selected];
   if(!bark(world,selected))return;
-  barkRings.push({x:dog.x,y:dog.y,t0:performance.now()/1000});
+  const t=nowS();
+  barkRings.push({x:dog.x,y:dog.y,t0:t});
   playClip('waf',1,.95+Math.random()*.12);
+  runStats.barks++;
+  // now and then a ewe right next to the barking dog faints clean away (for show: it is only huddling)
+  const close=world.sheep.find(s=>!s.penned&&s.kind===EWE&&Math.hypot(s.x-dog.x,s.y-dog.y)<70);
+  if(close&&!reducedMotion&&Math.random()<.25){anim(close).faintUntil=t+1.6;bubbles=bubbles.filter(b=>b.who!==close);sayIf(close,['x_x','*thud*','I’m out'],1,t);runStats.faints++;}
 }
 addEventListener('keydown',e=>{
   if(e.target.tagName==='INPUT')return; // typing a leaderboard name
@@ -954,6 +1164,7 @@ addEventListener('keydown',e=>{
   if(k==='p'||k==='Escape'){pause(mode==='play');return;}
   if(k==='Enter'&&mode==='done'&&e.target.tagName!=='BUTTON'){($('#ovNext').hidden?$('#ovRetry'):$('#ovNext')).click();return;}
   if(mode==='paused'&&MOVE_KEYS[k])pause(false);
+  if(WHISTLES[k]&&!e.repeat&&playing()){keys.add(k);start();whistleTone(WHISTLES[k]);return;}
   if(MOVE_KEYS[k]){e.preventDefault();if(playing()){keys.add(k);start();}}
   else if(k>='1'&&k<='3')pickDog(+k-1);
   else if(k==='Tab'){e.preventDefault();nextDog();}
@@ -962,9 +1173,14 @@ addEventListener('keydown',e=>{
   else if(k==='g'&&ghost)toggleGhost();
 });
 addEventListener('keyup',e=>{shift=e.shiftKey;keys.delete(keyName(e));});
-addEventListener('blur',()=>{keys.clear();pointerHeld=false;pause(true);});
+addEventListener('blur',()=>{keys.clear();whistleHeld=0;pointerHeld=false;pause(true);});
 $('#bRestart').onclick=reset;
 $('#bBark').onclick=doBark;
+for(const [id,dir] of [['#bComeBye',1],['#bAway',-1]]){ // hold to whistle
+  const b=$(id),stop=()=>{if(whistleHeld===dir)whistleHeld=0;b.classList.remove('on');};
+  b.addEventListener('pointerdown',e=>{audioCtx();if(!playing())return;start();whistleHeld=dir;b.classList.add('on');whistleTone(dir);b.setPointerCapture(e.pointerId);});
+  b.addEventListener('pointerup',stop);b.addEventListener('pointercancel',stop);
+}
 $('#bSound').onclick=toggleSound;
 $('#bGhost').onclick=toggleGhost;
 $('#ovRetry').onclick=reset;
@@ -978,12 +1194,18 @@ function steerDogs(){
   world.dogs.forEach((dog,i)=>{
     dog.driving=false;
     if(mode!=='play')return;
-    let x=0,y=0;
-    if(i===selected)for(const k of keys)if(MOVE_KEYS[k]){x+=MOVE_KEYS[k][0];y+=MOVE_KEYS[k][1];}
-    const steered=i===selected&&(pointerHeld&&pointer||x||y);
+    let x=0,y=0,flank=0;
+    if(i===selected){
+      for(const k of keys){if(MOVE_KEYS[k]){x+=MOVE_KEYS[k][0];y+=MOVE_KEYS[k][1];}if(WHISTLES[k])flank+=WHISTLES[k];}
+      flank+=whistleHeld;
+    }
+    const steered=i===selected&&(pointerHeld&&pointer||x||y||flank);
     if(steered)dog.send=null;
     if(i===selected&&pointerHeld&&pointer){
       Object.assign(dog,{driving:true,targetX:pointer[0],targetY:pointer[1],maxSpeed:DOG_MAX,gain:2.6});
+    }else if(flank&&!x&&!y){
+      const to=flankTarget(dog,Math.sign(flank));
+      if(to)Object.assign(dog,{driving:true,targetX:to[0],targetY:to[1],maxSpeed:DOG_MAX,gain:6});
     }else if(x||y){
       const len=Math.hypot(x,y);
       Object.assign(dog,{driving:true,targetX:dog.x+x/len*80,targetY:dog.y+y/len*80,maxSpeed:shift?DOG_MAX:DOG_WALK,gain:6});
@@ -1012,56 +1234,169 @@ function drawFence(x1,y1,x2,y2,wood='#8a5a32'){
   ctx.fillStyle='#5b3a1f';
   for(let i=0;i<=posts;i++){const x=x1+(x2-x1)*i/posts,y=y1+(y2-y1)*i/posts;ctx.fillRect(x-3.5,y-3.5,7,7);}
 }
-function drawSheep(s,t){
-  const bob=reducedMotion?0:s.hopTime>0?-Math.sin(s.hopTime/.4*Math.PI)*5:s.fear>.2?Math.sin(t*22+s.wanderAngle)*1.2:0;
-  ctx.save();ctx.translate(s.x,s.y+bob);ctx.rotate(s.heading);
-  if(s.kind===LAMB)ctx.scale(.62,.62);
-  ctx.fillStyle='rgba(30,40,20,.22)';ctx.beginPath();ctx.ellipse(1,3,11,8,0,0,7);ctx.fill();
-  ctx.fillStyle=s.kind===LAMB?'#fffdf6':'#f6f3ea';ctx.strokeStyle='#cfc7b2';ctx.lineWidth=1.2;
-  for(const [x,y,r] of [[-5,-3,5],[-5,3,5],[0,-4,5],[0,4,5],[4,0,5.5],[-1,0,6]]){ctx.beginPath();ctx.arc(x,y,r,0,7);ctx.fill();ctx.stroke();} // wool
-  ctx.fillStyle=s.kind===LAMB?'#6b5248':'#3a322e';
-  ctx.beginPath();ctx.ellipse(10,0,4.5,3.6,0,0,7);ctx.fill(); // head
-  ctx.beginPath();ctx.ellipse(8.5,-4,1.6,2.6,.6,0,7);ctx.ellipse(8.5,4,1.6,2.6,-.6,0,7);ctx.fill(); // ears
-  ctx.restore();
+// Sprites grow a little when the view zooms out, so the animals stay readable on big fields.
+const artScale=()=>1+Math.max(0,1-zoom)*.6;
+// Animation state lives on the sim's own objects under `anim`; the simulation never reads it.
+const anim=o=>o.anim??={walk:Math.random()*20,graze:0,blinkAt:Math.random()*4};
+function animate(dt,t){
+  for(const s of world.sheep){
+    const a=anim(s),speed=Math.hypot(s.vx,s.vy);
+    if(a.bell&&speed>30&&Math.floor((a.walk+speed*dt)/45)!==Math.floor(a.walk/45)&&inView(s.x,s.y,viewRect(0)))tinkle(speed);
+    a.walk+=speed*dt;
+    a.graze+=((!s.penned&&s.fear<.12&&speed<14?1:0)-a.graze)*Math.min(1,dt*2.5); // calm and still: head down, grazing
+    if(t>a.blinkAt+.15)a.blinkAt=t+2+Math.random()*4;
+    leavePrints(s,a,speed);
+  }
+  for(const d of world.dogs){const a=anim(d),speed=Math.hypot(d.vx,d.vy);a.walk+=speed*dt;leavePrints(d,a,speed);if(mode==='play')runStats.run+=speed*dt;}
 }
-function drawDog(d,colour,t){
-  ctx.save();ctx.translate(d.x,d.y);ctx.rotate(d.heading);
-  ctx.fillStyle=SHADOW;ctx.beginPath();ctx.ellipse(1,3,13,7,0,0,7);ctx.fill();
-  const wag=reducedMotion?0:Math.sin(t*(d.moving?25:6))*(d.moving?.5:.25);
-  ctx.strokeStyle='#1f1d1d';ctx.lineWidth=3;ctx.lineCap='round';
-  ctx.beginPath();ctx.moveTo(-11,0);ctx.lineTo(-18,6*Math.sin(wag));ctx.stroke(); // tail
-  ctx.fillStyle='#1f1d1d';ctx.beginPath();ctx.ellipse(-1,0,12,6.5,0,0,7);ctx.fill(); // body
-  ctx.fillStyle='#f4f2ec';ctx.beginPath();ctx.ellipse(5,0,4,5,0,0,7);ctx.fill(); // white chest
-  ctx.strokeStyle=colour;ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(8,-5);ctx.lineTo(8,5);ctx.stroke(); // collar
-  ctx.fillStyle='#1f1d1d';circle(12,0,5.2); // head
-  ctx.fillStyle='#f4f2ec';ctx.beginPath();ctx.ellipse(15.5,0,2.6,2,0,0,7);ctx.fill(); // muzzle
-  ctx.fillStyle='#1f1d1d';ctx.beginPath();ctx.ellipse(10,-4.6,2.2,3,-.5,0,7);ctx.ellipse(10,4.6,2.2,3,.5,0,7);ctx.fill(); // ears
+
+const WOOL='#f6f3ea',LAMB_WOOL='#fffdf6',BLACK_WOOL='#45403c';
+// Wool is drawn once per kind into a small picture, at 4x so it stays crisp when zoomed and on retina screens.
+const WOOL_R=12,woolSprites={};
+function woolSprite(kind){
+  if(woolSprites[kind])return woolSprites[kind];
+  const k=4,c=document.createElement('canvas');c.width=c.height=WOOL_R*2*k;
+  const g=c.getContext('2d');g.scale(k,k);g.translate(WOOL_R,WOOL_R);
+  const black=kind==='black';
+  g.fillStyle=black?BLACK_WOOL:kind==='lamb'?LAMB_WOOL:WOOL;g.strokeStyle=black?'#2b2725':'#cfc7b2';g.lineWidth=1.2;
+  for(const [x,y,r] of [[-5,-3,5],[-5,3,5],[0,-4,5],[0,4,5],[4,0,5.5],[-1,0,6]]){g.beginPath();g.arc(x,y,r,0,7);g.fill();g.stroke();}
+  g.fillStyle=black?'rgba(255,255,255,.08)':'rgba(255,255,255,.7)';
+  for(const [x,y,r] of [[-2,-1.5,3.4],[2.5,-1,2.2]]){g.beginPath();g.arc(x,y,r,0,7);g.fill();}
+  return woolSprites[kind]=c;
+}
+const LEG='#2e2724';
+function drawSheep(s,t){
+  const a=anim(s),lamb=s.kind===LAMB,speed=Math.hypot(s.vx,s.vy),still=reducedMotion;
+  if(a.faintUntil>t)return drawFainted(s,a,t);
+  const hop=still?0:s.hopTime>0?Math.sin(s.hopTime/.4*Math.PI)*5:0;
+  const cheer=!still&&s.penned&&s.penned.shut?Math.max(0,Math.sin(t*6+s.wanderAngle*5))**10*7:0; // a full pen bounces
+  const lift=hop+cheer,k=artScale()*(lamb?.62:1);
+  ctx.fillStyle='rgba(30,40,20,.22)';ctx.beginPath();ctx.ellipse(s.x+1,s.y+3*k,(11-lift*.3)*k,(8-lift*.2)*k,s.heading,0,7);ctx.fill();
+  ctx.save();ctx.translate(s.x,s.y-lift);ctx.rotate(s.heading);ctx.scale(k,k);
+  // legs peek out under the wool, swinging in diagonal pairs as it walks
+  const swing=still?0:Math.sin(a.walk*.32)*Math.min(1,speed/40)*3;
+  ctx.fillStyle=LEG;ctx.beginPath();
+  for(const [x,y,sgn] of [[7,-5,1],[-7,5,1],[7,5,-1],[-7,-5,-1]]){ctx.moveTo(x+swing*sgn+2,y*1.12);ctx.ellipse(x+swing*sgn,y*1.12,2,1.6,0,0,7);}
+  ctx.fill();
+  // wool, from a picture drawn once (it breathes a little)
+  const breathe=still?1:1+Math.sin(t*2.2+s.wanderAngle)*.03,sprite=woolSprite(a.black?'black':lamb?'lamb':'ewe');
+  ctx.drawImage(sprite,-WOOL_R*breathe,-WOOL_R*breathe,WOOL_R*2*breathe,WOOL_R*2*breathe);
+  // head: down and nibbling while it grazes, up with ears back when scared
+  const nibble=still?0:a.graze*Math.max(0,Math.sin(t*8+s.wanderAngle*3))*1.2;
+  const hx=10+a.graze*1.8+nibble,ears=.6+.7*Math.min(1,s.fear*1.6);
+  if(a.bell){ // the bellwether's collar and bell, swinging as she walks
+    const sw=still?0:Math.sin(a.walk*.32)*1.2;
+    ctx.strokeStyle='#b3402f';ctx.lineWidth=1.6;ctx.beginPath();ctx.moveTo(7.5,-4.5);ctx.quadraticCurveTo(9,0,7.5,4.5);ctx.stroke();
+    ctx.fillStyle='#e0b13c';ctx.beginPath();ctx.ellipse(9.2,sw,2,1.6,0,0,7);ctx.fill();ctx.fillStyle='#8a6a1c';circle(10.2,sw,.6);
+  }
+  ctx.fillStyle=lamb?'#6b5248':'#3a322e';
+  ctx.beginPath();ctx.ellipse(hx,0,4.5-a.graze*.4,3.6-a.graze*.3,0,0,7);ctx.fill();
+  ctx.beginPath();ctx.ellipse(hx-1.5-ears*.8,-4,1.6,2.8,ears,0,7);ctx.moveTo(hx-1.5-ears*.8+1.6,4);ctx.ellipse(hx-1.5-ears*.8,4,1.6,2.8,-ears,0,7);ctx.fill();
+  if(a.graze<.6&&!(t>a.blinkAt&&t<a.blinkAt+.15)){ // eyes, unless blinking or looking down at the grass
+    ctx.fillStyle=s.fear>.5?'#fff':'#e9e4d6';const r=s.fear>.5?1.25:.9;
+    ctx.beginPath();ctx.arc(hx+1.2,-1.9,r,0,7);ctx.moveTo(hx+1.2+r,1.9);ctx.arc(hx+1.2,1.9,r,0,7);ctx.fill();
+  }
   ctx.restore();
 }
 
+// Flat on its back, legs in the air, crosses for eyes.
+function drawFainted(s,a,t){
+  const k=artScale(),twitch=Math.sin(t*20)*.8;
+  ctx.save();ctx.translate(s.x,s.y);ctx.rotate(s.heading);ctx.scale(k,k);
+  ctx.fillStyle='rgba(30,40,20,.22)';ctx.beginPath();ctx.ellipse(1,3,12,9,0,0,7);ctx.fill();
+  ctx.strokeStyle=LEG;ctx.lineWidth=2.4;ctx.lineCap='round';
+  for(const [x,y] of [[5,-5],[5,5],[-5,-5],[-5,5]]){ctx.beginPath();ctx.moveTo(x*.6,y*.6);ctx.lineTo(x*1.9+twitch,y*2.1);ctx.stroke();}
+  ctx.fillStyle=a.black?BLACK_WOOL:WOOL;ctx.strokeStyle='#cfc7b2';ctx.lineWidth=1.2;
+  for(const [x,y,r] of [[-4,0,6],[2,0,6.5],[-1,-3,4.5],[-1,3,4.5]]){ctx.beginPath();ctx.arc(x,y,r,0,7);ctx.fill();ctx.stroke();}
+  ctx.fillStyle='#3a322e';ctx.beginPath();ctx.ellipse(11,0,4.5,3.6,0,0,7);ctx.fill();
+  ctx.strokeStyle='#fff';ctx.lineWidth=1;
+  for(const y of [-1.8,1.8]){ctx.beginPath();ctx.moveTo(11.4,y-1);ctx.lineTo(13.2,y+1);ctx.moveTo(13.2,y-1);ctx.lineTo(11.4,y+1);ctx.stroke();}
+  ctx.restore();
+}
+
+// Dogs gallop, wag, stick their tongue out at a sprint and lunge when they bark. A ghost passes a plain {x,y,heading,moving}.
+let winAt=null; // real time the last sheep went in: the dogs spin for joy
+function drawDog(d,colour,t){
+  const a=d.anim,speed=a?Math.hypot(d.vx,d.vy):d.moving?100:0,run=Math.min(1,speed/DOG_MAX),still=reducedMotion;
+  const phase=(a?a.walk:t*speed)*.2,k=artScale();
+  const spin=!still&&a&&winAt!==null&&t-winAt<.9?(t-winAt)/.9*6.283:0;
+  const lunge=a&&d.barkCooldown>BARK_COOLDOWN-.3?1:0;
+  ctx.fillStyle=SHADOW;ctx.beginPath();ctx.ellipse(d.x+1,d.y+3,13*k,7*k,d.heading+spin,0,7);ctx.fill();
+  ctx.save();ctx.translate(d.x,d.y);ctx.rotate(d.heading+spin);ctx.scale(k,k);
+  ctx.strokeStyle='#1f1d1d';ctx.lineCap='round';ctx.lineWidth=2.8;
+  const stride=still?0:Math.sin(phase)*5*run;
+  for(const [x,y,sgn] of [[6,-4.5,1],[6,4.5,.6],[-7,-4.5,-1],[-7,4.5,-.6]]){ // gallop: front pair and back pair alternate
+    ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x+stride*sgn+2,y*1.5);ctx.stroke();
+  }
+  const wag=still?0:Math.sin(t*(speed>25?25:8))*(speed>25?.5:.35);
+  ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(-11,0);ctx.quadraticCurveTo(-15,3*Math.sin(wag),-19,7*Math.sin(wag));ctx.stroke(); // tail
+  ctx.fillStyle='#1f1d1d';ctx.beginPath();ctx.ellipse(-1,0,12,6.5,0,0,7);ctx.fill(); // body
+  ctx.fillStyle='#f4f2ec';ctx.beginPath();ctx.ellipse(5,0,4,5,0,0,7);ctx.fill(); // white chest
+  ctx.beginPath();ctx.ellipse(-12,0,2.2,1.6,0,0,7);ctx.fill(); // white tail tip
+  ctx.strokeStyle=colour;ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(8,-5);ctx.lineTo(8,5);ctx.stroke(); // collar
+  const hx=12+lunge*3;
+  if(run>.5&&!lunge&&!still){ // tongue flapping out of the side of the mouth
+    ctx.fillStyle='#e8708a';ctx.beginPath();ctx.ellipse(hx+5,2.5+Math.sin(t*30)*.6,2.6,1.5,.5,0,7);ctx.fill();
+  }
+  ctx.fillStyle='#1f1d1d';circle(hx,0,5.2); // head
+  ctx.fillStyle='#f4f2ec';ctx.beginPath();ctx.ellipse(hx+3.5,0,2.6,2,0,0,7);ctx.fill(); // muzzle
+  if(lunge){ctx.fillStyle='#7a2230';ctx.beginPath();ctx.ellipse(hx+5.2,0,1.8,1.3,0,0,7);ctx.fill();} // open mouth
+  const flop=still?0:Math.sin(phase*2)*.35*run;
+  ctx.fillStyle='#1f1d1d';ctx.beginPath();ctx.ellipse(hx-2-run*1.5,-4.6,2.2,3,-.5-run*.6+flop,0,7);ctx.ellipse(hx-2-run*1.5,4.6,2.2,3,.5+run*.6-flop,0,7);ctx.fill(); // ears
+  ctx.fillStyle='#f4f2ec';circle(hx+1.6,-1.8,.9);circle(hx+1.6,1.8,.9); // eyes
+  ctx.restore();
+}
+
+// what the camera sees, in field coordinates, with a margin so things at the edge are not cut short
+function viewRect(margin=60){
+  return [cam.x-margin,cam.y-margin,cam.x+FIELD_W/zoom+margin,cam.y+FIELD_H/zoom+margin];
+}
+const inView=(x,y,[x0,y0,x1,y1])=>x>x0&&x<x1&&y>y0&&y<y1;
+
 function drawGround(now){
-  ctx.fillStyle='#86a663';ctx.fillRect(0,0,world.W,world.H);
-  ctx.fillStyle='#7f9e5d';for(let x=0;x<world.W;x+=80)ctx.fillRect(x,0,40,world.H); // mown stripes
+  const t=now/1000,view=viewRect(),[vx0,vy0,vx1,vy1]=view;
+  // beyond the field: rough grass, then the trees along the field wall
+  ctx.fillStyle='#5f7d45';ctx.fillRect(vx0,vy0,vx1-vx0,vy1-vy0);
+  const snow=level.weather==='snow';
+  ctx.fillStyle=snow?'#dce6ed':'#86a663';ctx.fillRect(0,0,world.W,world.H);
+  ctx.fillStyle=snow?'#d3dee7':'#7f9e5d'; // mown stripes (drifts, in snow)
+  for(let x=Math.max(0,Math.floor(vx0/80)*80);x<Math.min(world.W,vx1);x+=80)ctx.fillRect(x,0,Math.min(40,world.W-x),world.H);
+  const sway=reducedMotion?0:1;
+  ctx.strokeStyle=snow?'#b9c8d3':'#6d8c4e';ctx.lineWidth=1.5;ctx.beginPath();
   for(const [x,y,flower] of grass){
-    if(flower){ctx.fillStyle=flower;circle(x,y,2.2);continue;}
-    ctx.strokeStyle='#6d8c4e';ctx.lineWidth=1.5;
-    ctx.beginPath();ctx.moveTo(x-3,y-4);ctx.lineTo(x,y);ctx.lineTo(x+3,y-4);ctx.stroke();
+    if(flower||!inView(x,y,view)||snow&&x%3<2)continue; // in snow only a few tufts poke through
+    const lean=sway*Math.sin(t*1.6+x*.013+y*.007)*1.6; // wind waves across the field
+    ctx.moveTo(x-3+lean,y-4);ctx.lineTo(x,y);ctx.lineTo(x+3+lean,y-4);ctx.moveTo(x+lean*1.3,y-6);ctx.lineTo(x,y);
+  }
+  ctx.stroke();
+  for(const [x,y,flower] of grass){
+    if(!flower||snow||!inView(x,y,view))continue;
+    ctx.fillStyle=flower;for(let i=0;i<5;i++)circle(x+Math.cos(i*1.257)*2.2,y+Math.sin(i*1.257)*2.2,1.5);
+    ctx.fillStyle='#e0a83a';circle(x,y,1.2);
   }
   for(const [x,y,w,h] of world.mud){
     ctx.fillStyle='#7a5f3c';ctx.beginPath();ctx.roundRect(x,y,w,h,18);ctx.fill();
     ctx.fillStyle='#6a5032';
     for(let i=0;i<w*h/900;i++){const u=(i*73.1)%w,v=(i*37.7)%h;ctx.beginPath();ctx.ellipse(x+u,y+v,5,3,0,0,7);ctx.fill();}
+    ctx.fillStyle='rgba(255,255,255,.12)';
+    for(let i=0;i<w*h/5000;i++){const u=(i*53.3+20)%(w-20)+10,v=(i*29.9+12)%(h-20)+10;ctx.beginPath();ctx.ellipse(x+u,y+v,6,2.5,0,0,7);ctx.fill();} // puddle glints
   }
+  drawPrints(t);
   for(const [x,y,w,h] of world.water){
     ctx.fillStyle='#4f8fb8';ctx.fillRect(x,y,w,h);
-    ctx.strokeStyle='rgba(255,255,255,.25)';ctx.lineWidth=2;
-    for(let yy=y+14;yy<y+h;yy+=26)for(let xx=x+8+((yy/26|0)%2)*14;xx<x+w-14;xx+=30){ // ripples
-      ctx.beginPath();ctx.moveTo(xx,yy);ctx.quadraticCurveTo(xx+6,yy-5+Math.sin(now/600+xx)*1.5,xx+12,yy);ctx.stroke();
+    ctx.fillStyle='rgba(30,70,110,.25)';ctx.fillRect(x+6,y+6,w-12,h-12); // deeper in the middle
+    ctx.strokeStyle='rgba(255,255,255,.28)';ctx.lineWidth=2;
+    for(let yy=y+14;yy<y+h;yy+=26)for(let xx=x+8+((yy/26|0)%2)*14;xx<x+w-14;xx+=30){ // ripples, drifting downstream
+      if(!inView(xx,yy,view))continue;
+      const drift=(t*8+xx*.3)%26-13;
+      ctx.beginPath();ctx.moveTo(xx,yy+drift*.2);ctx.quadraticCurveTo(xx+6,yy-5+Math.sin(t*1.7+xx)*1.5,xx+12,yy+drift*.2);ctx.stroke();
     }
   }
+  drawRipples(t);
   for(const [x,y,w,h] of (level.bridges||[])){
     // the deck runs across the river: up and down when the water lies to its left or right
     const vertical=world.water.some(([wx,wy,ww,wh])=>wy<y+h&&wy+wh>y&&(Math.abs(wx+ww-x)<2||Math.abs(wx-x-w)<2));
+    ctx.fillStyle='rgba(20,40,60,.3)';ctx.fillRect(x+4,y+5,w,h); // shadow on the water
     ctx.fillStyle='#9b6b3e';ctx.fillRect(x,y,w,h);
     ctx.fillStyle='#7a5230'; // planks
     for(let i=0;i<(vertical?h:w);i+=12)vertical?ctx.fillRect(x,y+i,w,3):ctx.fillRect(x+i,y,3,h);
@@ -1069,17 +1404,259 @@ function drawGround(now){
     if(vertical){ctx.fillRect(x-3,y,4,h);ctx.fillRect(x+w-1,y,4,h);}
     else{ctx.fillRect(x,y-3,w,4);ctx.fillRect(x,y+h-1,w,4);}
   }
+  drawFieldWall(view);
 }
+// A dry-stone wall round the field, and trees beyond it where the view reaches past the edge.
+function drawFieldWall(view){
+  ctx.lineJoin='round';
+  ctx.strokeStyle='rgba(30,40,20,.3)';ctx.lineWidth=12;ctx.strokeRect(-4,-3,world.W+10,world.H+10);
+  ctx.strokeStyle='#8f8d80';ctx.lineWidth=10;ctx.strokeRect(-5,-5,world.W+10,world.H+10);
+  ctx.strokeStyle='#a9a798';ctx.lineWidth=6;ctx.setLineDash([9,4]);ctx.strokeRect(-5,-5,world.W+10,world.H+10);ctx.setLineDash([]);
+  for(const [x,y,r] of trees){
+    if(!inView(x,y,view))continue;
+    ctx.fillStyle='rgba(20,35,15,.3)';circle(x+r*.35,y+r*.45,r);
+    ctx.fillStyle='#3d6129';circle(x,y,r);
+    ctx.fillStyle='#4a7232';circle(x-r*.25,y-r*.25,r*.65);
+    ctx.fillStyle='#5a8a3c';circle(x-r*.35,y-r*.35,r*.3);
+    if(level.weather==='snow'){ctx.fillStyle='rgba(245,250,255,.85)';circle(x-r*.3,y-r*.3,r*.5);circle(x+r*.25,y-r*.1,r*.3);}
+  }
+}
+
+/* ---------- life: prints in the mud, ripples, birds, butterflies, clouds, chatter, confetti ---------- */
+let prints=[],ripples=[],trees=[],clouds=[],birds=[],butterflies=[],bubbles=[],confetti=[];
+function leavePrints(o,a,speed){ // a print every 13 px walked through mud; rings every so often while a dog swims
+  if(reducedMotion||speed<8)return;
+  const step=Math.floor(a.walk/13);
+  if(step===a.printStep)return;
+  a.printStep=step;
+  const snow=level.weather==='snow';
+  if(snow&&isSheep(o)&&world.sheep.indexOf(o)%3)return; // in snow every third sheep is enough to fill the field with tracks
+  if(snow||inRect(world.mud,o))prints.push({x:o.x+(step%2?3:-3)*Math.sin(o.heading),y:o.y-(step%2?3:-3)*Math.cos(o.heading),a:o.heading,t0:nowS(),dog:!isSheep(o)});
+  else if(!isSheep(o)&&inRect(world.water,o)&&step%3===0)ripples.push({x:o.x,y:o.y,t0:nowS()});
+  if(prints.length>1500)prints.splice(0,200);
+}
+function drawPrints(t){
+  const snow=level.weather==='snow',life=snow?16:10;
+  prints=prints.filter(p=>t-p.t0<life);
+  // four batches by age, each one path: newest darkest
+  for(let band=0;band<4;band++){
+    ctx.fillStyle=snow?`rgba(110,135,165,${.4*(1-band/4)})`:`rgba(60,40,20,${.45*(1-band/4)})`;ctx.beginPath();
+    for(const p of prints){
+      if(Math.min(3,(t-p.t0)/life*4|0)!==band)continue;
+      ctx.moveTo(p.x+2.4,p.y);ctx.ellipse(p.x,p.y,p.dog?2.2:1.8,p.dog?1.6:2.4,p.a,0,7);
+    }
+    ctx.fill();
+  }
+}
+function drawRipples(t){
+  ripples=ripples.filter(r=>t-r.t0<1.2);
+  for(const r of ripples){
+    const u=clamp((t-r.t0)/1.2,0,1),size=r.drop?.25:1;
+    if(r.drop&&u>.5)continue;
+    ctx.strokeStyle=`rgba(255,255,255,${(r.drop?.4:.5)*(1-u)})`;ctx.lineWidth=r.drop?1:1.5;
+    ctx.beginPath();ctx.ellipse(r.x,r.y,(6+u*22)*size,(4+u*15)*size,0,0,7);ctx.stroke();
+  }
+  if(ripples.length>300)ripples.splice(0,100);
+}
+
+// Everything that only decorates a level, laid out the same way every time it loads.
+function dressLevel(){
+  const random=rng(levelIndex*131+7),W=world.W,H=world.H;
+  trees=[];
+  for(let x=-40;x<W+80;x+=55+random()*40)for(const y of [-50-random()*30,H+50+random()*30])trees.push([x,y,22+random()*16]);
+  for(let y=30;y<H;y+=55+random()*40)for(const x of [-50-random()*30,W+50+random()*30])trees.push([x,y,22+random()*16]);
+  clouds=Array.from({length:Math.max(2,Math.round(W*H/220000))},()=>({x:random()*W,y:random()*H,
+    blobs:Array.from({length:4+random()*3|0},()=>[(random()-.5)*160,(random()-.5)*70,40+random()*50])}));
+  const open=(x,y)=>!inRect(world.water,{x,y})&&!world.pens.some(P=>x>P.x-20&&x<P.x+P.w+20&&y>P.y-20&&y<P.y+P.h+20)
+    &&world.dogs.every(d=>Math.hypot(d.x-x,d.y-y)>200)&&world.sheep.every(s=>Math.hypot(s.x-x,s.y-y)>40);
+  const spot=()=>{for(let i=0;i<40;i++){const x=40+random()*(W-80),y=40+random()*(H-80);if(open(x,y))return [x,y];}return [W/2,H/2];};
+  birds=Array.from({length:clamp(Math.round(W*H/160000),2,14)},()=>{const [x,y]=spot();return {x,y,z:0,vx:0,vy:0,state:'ground',peckAt:random()*3,face:random()*6.283,perch:null};});
+  butterflies=Array.from({length:clamp(Math.round(W*H/200000),2,9)},()=>{const [x,y]=spot();return {x,y,hx:x,hy:y,seed:random()*100,colour:['#fff6c8','#f4d35e','#a8d8f0','#f7b2c6'][random()*4|0]};});
+  prints=[];ripples=[];bubbles=[];confetti=[];
+  world.sheep.forEach((s,i)=>{anim(s).black=s.kind===EWE&&i%29===13;}); // one ewe in about thirty is a black sheep
+  const bell=world.sheep.find((s,i)=>s.kind===EWE&&!anim(s).black&&i>=world.sheep.length/3); // and one wears a bell
+  if(bell)anim(bell).bell=true;
+}
+
+const WIND={x:14,y:5}; // px per second the cloud shadows drift
+function updateLife(dt,t){
+  if(reducedMotion)return;
+  for(const c of clouds){
+    c.x+=WIND.x*dt;c.y+=WIND.y*dt;
+    if(c.x>world.W+200)c.x=-200;
+    if(c.y>world.H+120)c.y=-120;
+  }
+  for(const b of birds)updateBird(b,dt,t);
+  if(farmOf(levelIndex)==='Wet ground')for(let i=0;i<3;i++)if(Math.random()<dt*12){ // raindrops splashing in view
+    const [x0,y0,x1,y1]=viewRect(0);ripples.push({x:x0+Math.random()*(x1-x0),y:y0+Math.random()*(y1-y0),t0:t,drop:true});
+  }
+  for(const f of butterflies){ // flutter round home, drift off when something big comes close
+    const near=[...world.dogs,...world.sheep].find(o=>Math.hypot(o.x-f.x,o.y-f.y)<40);
+    if(near){f.hx+=(f.x-near.x)*.5;f.hy+=(f.y-near.y)*.5;f.hx=clamp(f.hx,20,world.W-20);f.hy=clamp(f.hy,20,world.H-20);}
+    f.x+=((f.hx+Math.sin(t*.9+f.seed)*40-f.x)*1.5+Math.sin(t*7+f.seed)*30)*dt;
+    f.y+=((f.hy+Math.cos(t*.7+f.seed)*30-f.y)*1.5+Math.cos(t*9+f.seed)*30)*dt;
+  }
+  for(const c of confetti){c.x+=c.vx*dt;c.y+=c.vy*dt;c.z+=c.vz*dt;c.vz-=260*dt;c.vx*=.99;c.vy*=.99;if(c.z<0){c.z=0;c.vz=0;c.vx*=.6;c.vy*=.6;}c.spin+=c.spinV*dt;}
+  confetti=confetti.filter(c=>t-c.t0<4);
+}
+// Crows peck about, take off when a dog comes near or the flock rushes past, and sometimes ride a calm sheep.
+function updateBird(b,dt,t){
+  const threat=world.dogs.find(d=>Math.hypot(d.x-b.x,d.y-b.y)<(d.sprint>.3?190:110))
+    ||world.sheep.find(s=>!s.penned&&Math.hypot(s.vx,s.vy)>70&&Math.hypot(s.x-b.x,s.y-b.y)<30);
+  if(b.state==='ground'||b.state==='perch'){
+    if(b.state==='perch'){
+      const s=b.perch;b.x=s.x-Math.cos(s.heading)*2;b.y=s.y-Math.sin(s.heading)*2-3;b.face=s.heading;
+      if(s.fear>.3||s.penned||threat)takeOff(b,threat||s);
+      return;
+    }
+    if(threat)return takeOff(b,threat);
+    if(t>b.peckAt+.25&&Math.random()<dt*.8){b.peckAt=t;b.face+=(Math.random()-.5)*1.5;} // peck, and turn a little
+    if(Math.random()<dt*.15){b.x+=Math.cos(b.face)*8;b.y+=Math.sin(b.face)*8;} // a hop
+    if(Math.random()<dt*.04){ // hop up on a sheep's back
+      const s=world.sheep.find(s=>!s.penned&&s.fear<.1&&s.kind===EWE&&Math.hypot(s.x-b.x,s.y-b.y)<45&&!birds.some(o=>o.perch===s));
+      if(s){b.state='perch';b.perch=s;sayIf(s,['…','hey!','get off','who’s up there?'],.7,t);}
+    }
+    return;
+  }
+  b.x+=b.vx*dt;b.y+=b.vy*dt;
+  if(b.state==='fly'){
+    b.z+=50*dt;
+    if(b.z>140)Object.assign(b,{state:'away',back:t+5+Math.random()*10});
+  }else if(b.state==='away'){
+    if(t<b.back)return;
+    // land again somewhere quiet, gliding in from up high
+    for(let i=0;i<20;i++){
+      const x=40+Math.random()*(world.W-80),y=40+Math.random()*(world.H-80);
+      if(world.dogs.some(d=>Math.hypot(d.x-x,d.y-y)<300)||inRect(world.water,{x,y})||world.pens.some(P=>x>P.x&&x<P.x+P.w&&y>P.y&&y<P.y+P.h))continue;
+      const from=Math.random()*6.283;
+      Object.assign(b,{state:'land',tx:x,ty:y,x:x+Math.cos(from)*260,y:y+Math.sin(from)*260,z:120,vx:-Math.cos(from)*150,vy:-Math.sin(from)*150,face:from+Math.PI});
+      break;
+    }
+  }else if(b.state==='land'){
+    const left=Math.hypot(b.tx-b.x,b.ty-b.y);
+    b.z=Math.min(b.z,left*.45);
+    if(left<6||threat&&left<80){Object.assign(b,{state:threat?'fly':'ground',x:b.tx,y:b.ty,z:0,vx:0,vy:0});if(threat)takeOff(b,threat);}
+  }
+}
+function takeOff(b,from){
+  if(b.state!=='fly'&&inView(b.x,b.y,viewRect(0)))caw();
+  const dx=b.x-from.x,dy=b.y-from.y,d=Math.hypot(dx,dy)||1,turn=(Math.random()-.5)*.8;
+  const ux=dx/d*Math.cos(turn)-dy/d*Math.sin(turn),uy=dx/d*Math.sin(turn)+dy/d*Math.cos(turn);
+  Object.assign(b,{state:'fly',vx:ux*190,vy:uy*190,face:Math.atan2(uy,ux),perch:null,z:Math.max(b.z,4)});
+}
+function drawBirds(t,shadows){
+  for(const b of birds){
+    if(b.state==='away')continue;
+    if(shadows){if(b.z>0){ctx.fillStyle=`rgba(30,40,20,${.25*Math.max(0,1-b.z/160)})`;ctx.beginPath();ctx.ellipse(b.x+b.z*.5,b.y+b.z*.7,5,3,b.face,0,7);ctx.fill();}continue;}
+    const air=b.state==='fly'||b.state==='land',scale=artScale()*(1+b.z/220);
+    ctx.save();ctx.translate(b.x,b.y-(b.state==='perch'?2:0));ctx.rotate(b.face);ctx.scale(scale,scale);
+    if(!air){ctx.fillStyle='rgba(30,40,20,.25)';ctx.beginPath();ctx.ellipse(1,2,6,3.5,0,0,7);ctx.fill();}
+    ctx.fillStyle='#232326';
+    if(air){ // flapping wings
+      const flap=Math.sin(t*(b.state==='land'?14:22)+b.x)*.9;
+      for(const side of [-1,1]){ctx.beginPath();ctx.moveTo(0,0);ctx.quadraticCurveTo(-2,side*(5+flap*4),-5,side*(9+flap*5));ctx.quadraticCurveTo(-1,side*4,2,0);ctx.fill();}
+    }
+    ctx.beginPath();ctx.ellipse(0,0,5,2.8,0,0,7);ctx.fill(); // body
+    ctx.beginPath();ctx.moveTo(-4,0);ctx.lineTo(-8,-2.2);ctx.lineTo(-8,2.2);ctx.fill(); // tail
+    const peck=!air&&t-b.peckAt<.25?2:0;
+    circle(4.5+peck,0,2.2); // head
+    ctx.fillStyle='#e0b13c';ctx.beginPath();ctx.moveTo(6.4+peck,-.8);ctx.lineTo(9+peck,0);ctx.lineTo(6.4+peck,.8);ctx.fill(); // beak
+    ctx.restore();
+  }
+}
+function drawButterflies(t){
+  for(const f of butterflies){
+    const flap=Math.abs(Math.sin(t*16+f.seed)),s=artScale();
+    ctx.fillStyle=f.colour;
+    ctx.beginPath();ctx.ellipse(f.x-2.2*flap*s,f.y,2.4*flap*s+.4,3*s,0,0,7);ctx.ellipse(f.x+2.2*flap*s,f.y,2.4*flap*s+.4,3*s,0,0,7);ctx.fill();
+    ctx.fillStyle='#3a322e';ctx.fillRect(f.x-.5,f.y-2.5*s,1,5*s);
+  }
+}
+function drawClouds(){
+  if(reducedMotion)return;
+  ctx.fillStyle='rgba(25,40,20,.075)';
+  for(const c of clouds){ctx.beginPath();for(const [u,v,r] of c.blobs){ctx.moveTo(c.x+u+r,c.y+v);ctx.ellipse(c.x+u,c.y+v,r,r*.75,0,0,7);}ctx.fill();}
+}
+
+// Speech bubbles: now and then a sheep says what it thinks.
+const LINES={
+  happy:['home!','comfy','straw!','finally','nice pen','baa!','safe'],
+  scared:['eek!','nope','run!','wolf?!','not again','baa!!','MUM'],
+  idle:['munch','baa','meh','grass','nom','…','lovely day'],
+  lost:['hello?','guys?','where is everyone?','baa?'],
+  wrong:['oops','wrong pen?','is this mine?'],
+  lamb:['mum!','wheee','boing','can we go?'],
+};
+function sayIf(s,lines,chance,t){
+  if(!s||Math.random()>chance||bubbles.length>=3||bubbles.some(b=>Math.hypot(b.who.x-s.x,b.who.y-s.y)<70))return; // one voice per patch of field
+  bubbles.push({who:s,text:lines[Math.random()*lines.length|0],t0:t});
+  runStats.said++;
+}
+function drawBubbles(t){
+  bubbles=bubbles.filter(b=>t-b.t0<1.9);
+  const size=12/zoom;
+  ctx.font=`600 ${size}px ${FONT}`;ctx.textAlign='center';ctx.textBaseline='middle';
+  for(const b of bubbles){
+    const u=t-b.t0,pop=Math.min(1,u/.12),fade=Math.min(1,(1.9-u)/.3);
+    const x=b.who.x,y=b.who.y-22*artScale()-size*.9,w=ctx.measureText(b.text).width+size*.9,h=size*1.55;
+    ctx.globalAlpha=fade;ctx.save();ctx.translate(x,y);ctx.scale(pop,pop);
+    ctx.fillStyle='rgba(30,40,20,.25)';ctx.beginPath();ctx.roundRect(-w/2+1.5,-h/2+2,w,h,h/2);ctx.fill();
+    ctx.fillStyle='#fffdf4';ctx.beginPath();ctx.roundRect(-w/2,-h/2,w,h,h/2);ctx.moveTo(-3,h/2-1);ctx.lineTo(0,h/2+5);ctx.lineTo(4,h/2-1);ctx.fill();
+    ctx.fillStyle='#3a322e';ctx.fillText(b.text,0,1);
+    ctx.restore();ctx.globalAlpha=1;
+  }
+}
+let nextChat=4;
+let runStats={run:0,barks:0,faints:0,said:0}; // for a line of nonsense on the results card
+function chatter(t){ // a calm sheep remarks on its day; on an open field a lost one calls for the flock
+  if(t<nextChat||mode!=='play'&&mode!=='ready')return;
+  nextChat=t+3+Math.random()*4;
+  const free=world.sheep.filter(s=>!s.penned);
+  if(!free.length)return;
+  const s=free[Math.random()*free.length|0];
+  if(world.open&&!free.some(o=>o!==s&&Math.hypot(o.x-s.x,o.y-s.y)<150))return sayIf(s,LINES.lost,.9,t);
+  if(s.fear<.15)sayIf(s,s.kind===LAMB?LINES.lamb:LINES.idle,.6,t);
+}
+
+// The last sheep is in: confetti and wool fly out of every pen.
+const CONFETTI=['#efbd4c','#ef7b6b','#71bdf0','#9bd47a','#f7b2c6','#ffffff'];
+function celebrate(t){
+  winAt=t;
+  if(reducedMotion)return;
+  for(const P of world.pens)for(let i=0;i<70;i++){
+    const a=Math.random()*6.283,v=60+Math.random()*160;
+    confetti.push({x:P.x+P.w/2,y:P.y+P.h/2,z:10,vx:Math.cos(a)*v,vy:Math.sin(a)*v,vz:160+Math.random()*200,
+      colour:CONFETTI[i%CONFETTI.length],spin:Math.random()*6,spinV:(Math.random()-.5)*20,t0:t,wool:i%7===0});
+  }
+}
+function drawConfetti(t){
+  for(const c of confetti){
+    const fade=Math.min(1,(4-(t-c.t0))/.8);
+    ctx.globalAlpha=fade;
+    if(c.wool){ctx.fillStyle='#fffdf6';circle(c.x,c.y-c.z,3.5);continue;}
+    ctx.save();ctx.translate(c.x,c.y-c.z);ctx.rotate(c.spin);ctx.scale(1,Math.cos(c.spin*1.7));
+    ctx.fillStyle=c.colour;ctx.fillRect(-3,-1.6,6,3.2);ctx.restore();
+  }
+  ctx.globalAlpha=1;
+}
+
 function drawPens(){
   for(const P of world.pens){
     ctx.fillStyle='#b6a26a';ctx.fillRect(P.x,P.y,P.w,P.h);
     ctx.fillStyle='rgba(120,95,50,.25)';for(let y=P.y+6;y<P.y+P.h;y+=12)ctx.fillRect(P.x+4,y,P.w-8,2); // straw
-    if(P.kind===undefined)continue;
-    // a sorting pen shows which kind it counts, and how many of them are in
-    const have=world.sheep.filter(s=>s.penned===P).length,need=world.sheep.filter(s=>s.kind===P.kind).length;
+    // a water trough along the back wall and a hay bale in a back corner
+    const along=P.gate==='left'||P.gate==='right',tw=Math.min(70,(along?P.h:P.w)*.4);
+    const [tx,ty]={left:[P.x+P.w-16,P.y+P.h/2-tw/2],right:[P.x+6,P.y+P.h/2-tw/2],top:[P.x+P.w/2-tw/2,P.y+P.h-16],bottom:[P.x+P.w/2-tw/2,P.y+6]}[P.gate];
+    ctx.fillStyle='#6d6a62';along?ctx.fillRect(tx,ty,10,tw):ctx.fillRect(tx,ty,tw,10);
+    ctx.fillStyle='#6fa6c8';along?ctx.fillRect(tx+2,ty+2,6,tw-4):ctx.fillRect(tx+2,ty+2,tw-4,6);
+    const [hx,hy]={left:[P.x+P.w-34,P.y+8],right:[P.x+8,P.y+8],top:[P.x+8,P.y+P.h-34],bottom:[P.x+8,P.y+8]}[P.gate];
+    ctx.fillStyle='#d9b85c';ctx.fillRect(hx,hy,26,18);ctx.fillStyle='#c09a3e';ctx.fillRect(hx,hy+5,26,2);ctx.fillRect(hx,hy+11,26,2);
+    // how many are in: a sorting pen counts only its own kind
+    const sorting=P.kind!==undefined,k=artScale();
+    const have=world.sheep.filter(s=>s.penned===P).length,need=sorting?world.sheep.filter(s=>s.kind===P.kind).length:world.sheep.length;
     ctx.globalAlpha=.6;
-    label(P.kind===LAMB?'LAMBS':'EWES',P.x+P.w/2,P.y+P.h/2-10,16);
-    label(`${have}/${need}`,P.x+P.w/2,P.y+P.h/2+10,14);
+    if(sorting)label(P.kind===LAMB?'LAMBS':'EWES',P.x+P.w/2,P.y+P.h/2-10*k,16*k);
+    label(`${have}/${need}`,P.x+P.w/2,P.y+P.h/2+(sorting?10*k:0),(sorting?14:16)*k);
     ctx.globalAlpha=1;
   }
 }
@@ -1105,6 +1682,11 @@ function drawRocks(){
     ctx.fillStyle=SHADOW;ctx.beginPath();ctx.ellipse(cx+4,cy+6,r,r*.85,0,0,7);ctx.fill();
     ctx.fillStyle='#8f938a';circle(cx,cy,r);
     ctx.fillStyle='#a6aaa0';circle(cx-r*.25,cy-r*.3,r*.55);
+    ctx.fillStyle='#b8bbb1';circle(cx-r*.38,cy-r*.42,r*.22);
+    ctx.fillStyle='rgba(95,125,60,.55)';circle(cx+r*.45,cy+r*.35,r*.28);circle(cx+r*.2,cy+r*.55,r*.18); // moss on the shady side
+    ctx.strokeStyle='rgba(60,62,58,.5)';ctx.lineWidth=1.5;ctx.beginPath(); // a crack
+    ctx.moveTo(cx+r*.1,cy-r*.75);ctx.lineTo(cx+r*.25,cy-r*.35);ctx.lineTo(cx+r*.12,cy-r*.05);ctx.stroke();
+    if(level.weather==='snow'){ctx.fillStyle='rgba(248,251,255,.92)';circle(cx-r*.2,cy-r*.25,r*.62);}
   }
 }
 // Each dog's scare range: solid disc (grows and turns red while sprinting) and the dashed walking range.
@@ -1176,7 +1758,7 @@ function drawMinimap(){
   if(!bigField())return;
   const m=minimapRect(),k=m.scale,X=x=>m.x+x*k,Y=y=>m.y+y*k;
   ctx.fillStyle='rgba(18,23,16,.55)';ctx.beginPath();ctx.roundRect(m.x-4,m.y-4,m.w+8,m.h+8,8);ctx.fill();
-  ctx.fillStyle='#6f8c52';ctx.fillRect(m.x,m.y,m.w,m.h);
+  ctx.fillStyle={snow:'#c9d6e0',night:'#2c3a3a',fog:'#a9b4ad'}[level.weather]||'#6f8c52';ctx.fillRect(m.x,m.y,m.w,m.h);
   ctx.fillStyle='#7a5f3c';for(const [x,y,w,h] of world.mud)ctx.fillRect(X(x),Y(y),w*k,h*k);
   ctx.fillStyle='#4f8fb8';for(const [x,y,w,h] of world.water)ctx.fillRect(X(x),Y(y),w*k,h*k);
   ctx.fillStyle='#9b6b3e';for(const [x,y,w,h] of (level.bridges||[]))ctx.fillRect(X(x),Y(y),w*k,h*k);
@@ -1187,32 +1769,68 @@ function drawMinimap(){
   for(const [x1,y1,x2,y2] of world.walls){ctx.beginPath();ctx.moveTo(X(x1),Y(y1));ctx.lineTo(X(x2),Y(y2));ctx.stroke();}
   for(const s of world.sheep){ctx.fillStyle=s.kind===LAMB?'#fff6d0':'#ffffff';ctx.fillRect(X(s.x)-1,Y(s.y)-1,2,2);}
   world.dogs.forEach((dog,i)=>{ctx.fillStyle=DOG_COLOURS[i];circle(X(dog.x),Y(dog.y),i===selected?3.5:2.5);});
+  if(world.wolf&&world.wolf.state!=='away'){ctx.fillStyle='#ef7b6b';circle(X(world.wolf.x),Y(world.wolf.y),3);}
+  ctx.save();ctx.beginPath();ctx.rect(m.x,m.y,m.w,m.h);ctx.clip(); // the view box, cut at the map's edge
   ctx.strokeStyle='rgba(255,255,255,.8)';ctx.lineWidth=1;
   ctx.strokeRect(X(cam.x),Y(cam.y),FIELD_W/zoom*k,FIELD_H/zoom*k);
+  ctx.restore();
 }
 function drawBushes(){ // drawn over the sheep, so hidden sheep are hard to see
   const blobs=[[0,0,1,'#3f6b2c'],[-.45,-.3,.62,'#4c7d35'],[.45,-.25,.6,'#4c7d35'],[-.2,.4,.6,'#46752f'],[.35,.35,.55,'#46752f']];
   ctx.globalAlpha=.88;
-  for(const [x,y,r] of world.bushes)for(const [u,v,k,colour] of blobs){ctx.fillStyle=colour;circle(x+u*r,y+v*r,r*k);}
+  const t=nowS();
+  for(const [x,y,r] of world.bushes){
+    const busy=!reducedMotion&&world.sheep.some(s=>Math.hypot(s.x-x,s.y-y)<r&&Math.hypot(s.vx,s.vy)>12); // rustles while a sheep pushes through
+    const shake=busy?Math.sin(t*38)*1.6:0;
+    for(const [u,v,k,colour] of blobs){ctx.fillStyle=colour;circle(x+u*r+shake*(1-k),y+v*r,r*k);}
+    if(level.weather==='snow'){ctx.fillStyle='rgba(245,250,255,.85)';circle(x-r*.35+shake,y-r*.35,r*.42);circle(x+r*.3,y-r*.3,r*.3);}
+  }
   ctx.globalAlpha=1;
 }
 function drawBarkRings(t){
   barkRings=barkRings.filter(b=>t-b.t0<.7);
   for(const b of barkRings){
-    const u=(t-b.t0)/.7;
+    const u=clamp((t-b.t0)/.7,0,1); // a bark can be stamped a moment after this frame's time
     ctx.strokeStyle=`rgba(255,240,200,${.8*(1-u)})`;ctx.lineWidth=4;
     ctx.beginPath();ctx.arc(b.x,b.y,20+u*(BARK_RADIUS-20),0,7);ctx.stroke();
     label('WOOF!',b.x,b.y-30-u*16,18);
   }
 }
+// The wolf: lean and grey, yellow eyes, tail low while it hunts and tucked in when it runs.
+function drawWolf(t){
+  const w=world.wolf;
+  if(!w||w.state==='away')return;
+  const k=artScale()*1.3,speed=Math.hypot(w.vx,w.vy),phase=t*speed*.06,still=reducedMotion;
+  // the ground it frightens sheep from, pulsing red while it hunts
+  const pulse=w.state==='hunt'&&!still?.5+.5*Math.sin(t*5):0;
+  ctx.globalAlpha=.10+.06*pulse;ctx.fillStyle='#ef7b6b';circle(w.x,w.y,WOLF_RANGE);
+  ctx.globalAlpha=.4;ctx.strokeStyle='#ef7b6b';ctx.lineWidth=2;ctx.setLineDash([6,8]);ctx.beginPath();ctx.arc(w.x,w.y,WOLF_RANGE,0,7);ctx.stroke();ctx.setLineDash([]);
+  ctx.globalAlpha=1;
+  ctx.fillStyle=SHADOW;ctx.beginPath();ctx.ellipse(w.x+1,w.y+3,15*k,7*k,w.heading,0,7);ctx.fill();
+  ctx.save();ctx.translate(w.x,w.y);ctx.rotate(w.heading);ctx.scale(k,k);
+  ctx.strokeStyle='#4a4a4c';ctx.lineCap='round';ctx.lineWidth=3;
+  const stride=still?0:Math.sin(phase)*5*Math.min(1,speed/150);
+  for(const [x,y,sgn] of [[7,-5,1],[7,5,.6],[-8,-5,-1],[-8,5,-.6]]){ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x+stride*sgn+2,y*1.5);ctx.stroke();}
+  const tuck=w.state==='flee'?4:0;
+  ctx.fillStyle='#6d6c6e';ctx.beginPath();ctx.moveTo(-12,0);ctx.quadraticCurveTo(-20,3-tuck,-25+tuck,6-tuck);ctx.quadraticCurveTo(-19,-1,-12,-3);ctx.fill(); // bushy tail
+  ctx.fillStyle='#7c7b7e';ctx.beginPath();ctx.ellipse(-1,0,14,7,0,0,7);ctx.fill(); // body
+  ctx.fillStyle='#9a999b';ctx.beginPath();ctx.ellipse(1,0,8,4,0,0,7);ctx.fill(); // lighter back
+  ctx.fillStyle='#7c7b7e';ctx.beginPath();ctx.moveTo(10,-5);ctx.lineTo(22,0);ctx.lineTo(10,5);ctx.fill(); // long snout
+  circle(12,0,5.5);
+  ctx.fillStyle='#5c5b5d';ctx.beginPath();ctx.moveTo(9,-4);ctx.lineTo(7,-9);ctx.lineTo(12,-5);ctx.moveTo(9,4);ctx.lineTo(7,9);ctx.lineTo(12,5);ctx.fill(); // pointed ears
+  ctx.fillStyle='#232224';circle(22,0,1.4); // nose
+  ctx.fillStyle='#f2c230';circle(14,-2.2,1.2);circle(14,2.2,1.2); // eyes
+  ctx.restore();
+}
 function drawDogs(t){
   world.dogs.forEach((dog,i)=>{
-    if(i===selected){ctx.strokeStyle=DOG_COLOURS[i];ctx.lineWidth=3;ctx.beginPath();ctx.arc(dog.x,dog.y,20,0,7);ctx.stroke();}
+    if(i===selected){ctx.strokeStyle=DOG_COLOURS[i];ctx.lineWidth=3;ctx.beginPath();ctx.arc(dog.x,dog.y,20*artScale(),0,7);ctx.stroke();}
     drawDog(dog,DOG_COLOURS[i],t);
     if(world.dogs.length<2)return;
-    ctx.fillStyle=DOG_COLOURS[i];circle(dog.x,dog.y-24,8); // number badge
-    ctx.font=`700 11px ${FONT}`;ctx.textAlign='center';ctx.textBaseline='middle';
-    ctx.fillStyle='#2a2410';ctx.fillText(i+1,dog.x,dog.y-23.5);
+    const by=dog.y-24*artScale();
+    ctx.fillStyle=DOG_COLOURS[i];circle(dog.x,by,8*artScale()); // number badge
+    ctx.font=`700 ${11*artScale()}px ${FONT}`;ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillStyle='#2a2410';ctx.fillText(i+1,dog.x,by+.5);
   });
 }
 function drawPopups(t){ // "+1" for a penned sheep, a red cross for one in the wrong pen
@@ -1262,6 +1880,33 @@ function lesson(){ // the tutorial prompt showing now, if any
   while(tutorialStep<steps.length-1&&steps[tutorialStep].done())tutorialStep++;
   return steps[tutorialStep];
 }
+// On a level that needs a second dog as a blocker: a pulsing ring in dog 2's colour where it should stand,
+// until it gets there.
+function drawBlockerSpot(t){
+  const spot=level.blocker,dog=world.dogs[1];
+  if(!spot||!dog||mode==='done'||Math.hypot(dog.x-spot[0],dog.y-spot[1])<40)return;
+  const pulse=reducedMotion?.5:(t*1.1)%1;
+  ctx.strokeStyle=DOG_COLOURS[1];ctx.globalAlpha=.9*(1-pulse);ctx.lineWidth=3;
+  ctx.beginPath();ctx.arc(spot[0],spot[1],16+26*pulse,0,7);ctx.stroke();
+  ctx.globalAlpha=.85;ctx.setLineDash([4,6]);ctx.lineWidth=2;
+  ctx.beginPath();ctx.arc(spot[0],spot[1],16,0,7);ctx.stroke();ctx.setLineDash([]);
+  ctx.fillStyle=DOG_COLOURS[1];ctx.font=`700 ${14*artScale()}px ${FONT}`;ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.fillText('2',spot[0],spot[1]+.5);
+  ctx.globalAlpha=1;
+}
+// A dog out of view: an arrow at the edge of the screen pointing to it, in its colour.
+function drawOffscreenDogs(){
+  world.dogs.forEach((dog,i)=>{
+    const sx=(dog.x-cam.x)*zoom,sy=(dog.y-cam.y)*zoom,pad=22;
+    if(sx>0&&sy>0&&sx<FIELD_W&&sy<FIELD_H)return;
+    const x=clamp(sx,pad,FIELD_W-pad),y=clamp(sy,pad,FIELD_H-pad),a=Math.atan2(sy-y,sx-x);
+    ctx.save();ctx.translate(x,y);ctx.rotate(a);
+    ctx.fillStyle='rgba(18,23,16,.6)';circle(0,0,13);
+    ctx.fillStyle=DOG_COLOURS[i];ctx.beginPath();ctx.moveTo(15,0);ctx.lineTo(7,-6);ctx.lineTo(7,6);ctx.fill();
+    ctx.rotate(-a);ctx.font=`700 12px ${FONT}`;ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(i+1,0,1);
+    ctx.restore();
+  });
+}
 function drawLessonRing(step,t){
   const {x,y}=step.target(),pulse=(t*1.2)%1;
   ctx.strokeStyle=`rgba(255,255,255,${.85*(1-pulse)})`;ctx.lineWidth=3;
@@ -1285,6 +1930,8 @@ function render(now){
   const t=now/1000,step=lesson();
   ctx.setTransform(DPR*zoom,0,0,DPR*zoom,-cam.x*DPR*zoom,-cam.y*DPR*zoom); // the field, as the camera sees it
   drawGround(now);
+  drawButterflies(t);
+  drawBirds(t,true);
   drawPens();
   drawRocks();
   const shut=world.pens.filter(P=>P.shut).length; // a shut gate is the last wall added, drawn as leaves instead
@@ -1294,25 +1941,157 @@ function render(now){
   drawRanges();
   drawGhost(t);
   drawPointerLine();
-  for(const s of world.sheep)drawSheep(s,t);
+  const view=viewRect(40);
+  for(const s of world.sheep)if(inView(s.x,s.y,view))drawSheep(s,t);
+  drawBirds(t,false);
+  drawWolf(t);
   drawBushes();
   drawBarkRings(t);
   drawDogs(t);
+  drawClouds();
+  drawConfetti(t);
+  drawBubbles(t);
   drawPopups(t);
   if(step)drawLessonRing(step,t);
+  drawBlockerSpot(t);
   ctx.setTransform(DPR,0,0,DPR,0,0); // the screen
+  drawLight();
+  drawWeather(t);
+  drawOffscreenDogs();
   drawMinimap();
+  drawBanner(t);
   drawHint(step);
 }
 
+// Each farm has its own light: morning, noon, rain, evening.
+const FARM_LIGHT={'Trial ground':'rgba(255,200,120,.06)','Wet ground':'rgba(70,110,150,.08)','Sorting day':'rgba(255,230,190,.05)',
+  'Open hill':'rgba(255,236,190,.07)','Big country':'rgba(255,150,70,.09)'};
+// When a level loads: its name, farm and flock size, sliding in and fading away.
+let banner=-9;
+function drawBanner(t){
+  const u=t-banner;
+  if(u>2.6||u<0)return;
+  const farm=FARMS.find(f=>f.levels.includes(levelIndex)),number=ORDER.indexOf(levelIndex)+1;
+  const fade=Math.min(1,(2.6-u)/.5),slide=reducedMotion?0:(1-Math.min(1,u/.35))**3*-40;
+  ctx.globalAlpha=fade;
+  ctx.fillStyle='rgba(18,23,16,.55)';ctx.beginPath();ctx.roundRect(FIELD_W/2-190,FIELD_H/2-58+slide,380,116,18);ctx.fill();
+  label(`${farm.name.toUpperCase()} · ${number}`,FIELD_W/2,FIELD_H/2-30+slide,13);
+  label(level.name,FIELD_W/2,FIELD_H/2+2+slide,32);
+  const sheep=world.sheep.length,dogs=world.dogs.length;
+  label(`${sheep} sheep · ${dogs} ${dogs>1?'dogs':'dog'}`,FIELD_W/2,FIELD_H/2+36+slide,15);
+  ctx.globalAlpha=1;
+}
+const farmOf=i=>FARMS.find(f=>f.levels.includes(i))?.name;
+function drawLight(){
+  const light=FARM_LIGHT[farmOf(levelIndex)];
+  if(light){ctx.fillStyle=light;ctx.fillRect(0,0,FIELD_W,FIELD_H);}
+  if(farmOf(levelIndex)==='Wet ground')drawRain(nowS());
+}
+// Wet ground: a steady drizzle across the screen, with drops splashing on the field (see updateLife)
+function drawRain(t,heavy=1){
+  if(reducedMotion)return;
+  ctx.strokeStyle=`rgba(225,238,255,${.3+.08*heavy})`;ctx.lineWidth=1.2;ctx.beginPath();
+  for(let i=0;i<90*heavy;i++){
+    const x=((i*97.3+t*70*heavy)%(FIELD_W+40))-20,y=((i*53.9+t*(620+i%5*40)*heavy)%(FIELD_H+40))-20;
+    ctx.moveTo(x,y);ctx.lineTo(x-4*heavy,y+13*heavy);
+  }
+  ctx.stroke();
+}
+
+/* ---------- weather: night, fog, snow, storm (see the All weathers levels) ---------- */
+// Night and fog: a cover over the screen with soft holes round each dog and each pen.
+const cover=document.createElement('canvas');
+function drawCover(t,colour,dogLight,penLight){
+  if(cover.width!==canvas.width||cover.height!==canvas.height){cover.width=canvas.width;cover.height=canvas.height;}
+  const g=cover.getContext('2d'),k=zoom*DPR;
+  g.globalCompositeOperation='source-over';g.clearRect(0,0,cover.width,cover.height);
+  g.fillStyle=colour;g.fillRect(0,0,cover.width,cover.height);
+  g.globalCompositeOperation='destination-out';
+  const hole=(x,y,r)=>{
+    const sx=(x-cam.x)*k,sy=(y-cam.y)*k,sr=r*k,grad=g.createRadialGradient(sx,sy,sr*.3,sx,sy,sr);
+    grad.addColorStop(0,'rgba(0,0,0,1)');grad.addColorStop(1,'rgba(0,0,0,0)');
+    g.fillStyle=grad;g.beginPath();g.arc(sx,sy,sr,0,7);g.fill();
+  };
+  const flicker=reducedMotion?1:1+Math.sin(t*9)*.02+Math.sin(t*23)*.015;
+  for(const d of world.dogs)hole(d.x,d.y,dogLight*flicker);
+  for(const P of world.pens)hole(P.x+P.w/2,P.y+P.h/2,penLight*flicker);
+  ctx.setTransform(1,0,0,1,0,0);ctx.drawImage(cover,0,0);ctx.setTransform(DPR,0,0,DPR,0,0);
+}
+const toScreenXY=(x,y)=>[(x-cam.x)*zoom,(y-cam.y)*zoom];
+const lit=(x,y,r)=>world.dogs.some(d=>Math.hypot(d.x-x,d.y-y)<r)||world.pens.some(P=>Math.hypot(P.x+P.w/2-x,P.y+P.h/2-y)<r*.8);
+const NIGHT_LIGHT=170,FOG_LIGHT=250;
+function drawNight(t){
+  drawCover(t,'rgba(8,12,32,.88)',NIGHT_LIGHT,140);
+  // a warm glow round the lantern on each pen
+  for(const P of world.pens){
+    const [x,y]=toScreenXY(P.x+P.w/2,P.y+P.h/2),g=ctx.createRadialGradient(x,y,0,x,y,120*zoom);
+    g.addColorStop(0,'rgba(255,200,110,.18)');g.addColorStop(1,'rgba(255,200,110,0)');ctx.fillStyle=g;ctx.fillRect(x-120*zoom,y-120*zoom,240*zoom,240*zoom);
+  }
+  // eyes shining in the dark, blinking now and then
+  const view=viewRect(0);
+  ctx.fillStyle='rgba(215,240,170,.85)';ctx.beginPath();
+  for(const s of world.sheep){
+    if(s.penned||!inView(s.x,s.y,view)||lit(s.x,s.y,NIGHT_LIGHT*.75))continue;
+    const a=anim(s);if(a.faintUntil>t||t>a.blinkAt&&t<a.blinkAt+.15||a.graze>.6)continue;
+    const k=artScale()*(s.kind===LAMB?.62:1),c=Math.cos(s.heading),n=Math.sin(s.heading);
+    for(const side of [-1,1]){
+      const [x,y]=toScreenXY(s.x+(c*11-n*side*2)*k,s.y+(n*11+c*side*2)*k);
+      ctx.moveTo(x+1.3,y);ctx.arc(x,y,1.3,0,7);
+    }
+  }
+  ctx.fill();
+  // fireflies
+  for(const f of butterflies){
+    const glow=Math.max(0,Math.sin(t*2.3+f.seed*7));
+    if(glow<.05)continue;
+    const [x,y]=toScreenXY(f.x,f.y),g=ctx.createRadialGradient(x,y,0,x,y,7);
+    g.addColorStop(0,`rgba(240,255,150,${glow})`);g.addColorStop(1,'rgba(240,255,150,0)');ctx.fillStyle=g;ctx.fillRect(x-7,y-7,14,14);
+  }
+}
+function drawFog(t){
+  drawCover(t,'rgba(222,228,233,.9)',FOG_LIGHT,190);
+  if(reducedMotion)return;
+  ctx.fillStyle='rgba(235,239,242,.22)'; // banks of fog rolling past
+  for(const c of clouds){const [x,y]=toScreenXY(c.x,c.y);ctx.beginPath();for(const [u,v,rr] of c.blobs){ctx.moveTo(x+(u+rr)*zoom,y+v*zoom);ctx.ellipse(x+u*zoom,y+v*zoom,rr*zoom*1.6,rr*zoom,0,0,7);}ctx.fill();}
+}
+function drawSnowfall(t){
+  if(reducedMotion)return;
+  ctx.fillStyle='rgba(255,255,255,.85)';ctx.beginPath();
+  for(let i=0;i<140;i++){
+    const r=1+(i%3)*.7,x=((i*83.7+Math.sin(t*.8+i)*18+t*12)%(FIELD_W+20))-10,y=((i*41.3+t*(28+i%4*9))%(FIELD_H+20))-10;
+    ctx.moveTo(x+r,y);ctx.arc(x,y,r,0,7);
+  }
+  ctx.fill();
+}
+let flashAt=-9;
+function drawStorm(t){
+  ctx.fillStyle='rgba(25,35,55,.2)';ctx.fillRect(0,0,FIELD_W,FIELD_H);
+  drawRain(t,2);
+  const u=t-flashAt;
+  if(u<.35&&!reducedMotion){ctx.fillStyle=`rgba(240,245,255,${.65*(1-u/.35)*(u<.08||u>.14?1:.3)})`;ctx.fillRect(0,0,FIELD_W,FIELD_H);} // a double flash
+}
+function drawWeather(t){
+  const w=level.weather;
+  if(w==='night')drawNight(t);
+  else if(w==='fog')drawFog(t);
+  else if(w==='snow')drawSnowfall(t);
+  else if(w==='storm')drawStorm(t);
+}
+const howl=()=>{tone(320,{length:.5,volume:.09,type:'sine',endFreq:620});tone(620,{delay:.45,length:1.3,volume:.09,type:'sine',endFreq:470});tone(930,{delay:.45,length:1.2,volume:.025,type:'sine',endFreq:700});};
+const yelp=()=>{tone(900,{length:.12,volume:.07,type:'triangle',endFreq:1400});tone(1300,{delay:.14,length:.1,volume:.05,type:'triangle',endFreq:1700});};
+const rumble=()=>{tone(55,{length:1.6,volume:.35,type:'sine',endFreq:38});tone(82,{delay:.05,length:1.1,volume:.2,type:'triangle',endFreq:50});tone(140,{length:.25,volume:.12,type:'sawtooth',endFreq:60});};
+
 /* ---------- main loop ---------- */
 let lastFrame=performance.now(),shown={}; // shown: last text written to each HUD element, to skip needless DOM writes
-function showText(id,text){if(shown[id]!==text){shown[id]=text;$('#'+id).textContent=text;}}
+function showText(id,text){if(shown[id]===text)return false;shown[id]=text;$('#'+id).textContent=text;return true;}
 function handleEvent(ev,t){
-  if(ev.type==='pen'){popups.push({x:ev.x,y:ev.y,t0:t,text:'+1',colour:'#efbd4c'});penChime(t);}
-  else if(ev.type==='wrong'){popups.push({x:ev.x,y:ev.y,t0:t,text:'✗',colour:'#ef7b6b'});wrongBuzz();}
-  else if(ev.type==='shut'){gateShut.set(ev.pen,t);gateThud(GATE_SWING*.85);}
-  else if(ev.type==='bleat')bleat(ev.kind,.7);
+  if(ev.type==='pen'){popups.push({x:ev.x,y:ev.y,t0:t,text:'+1',colour:'#efbd4c'});penChime(t);sayIf(ev.sheep,LINES.happy,.3,t);}
+  else if(ev.type==='wrong'){popups.push({x:ev.x,y:ev.y,t0:t,text:'✗',colour:'#ef7b6b'});wrongBuzz();sayIf(ev.sheep,LINES.wrong,.9,t);}
+  else if(ev.type==='shut'){gateShut.set(ev.pen,t);gateThud(GATE_SWING*.85);sayIf(world.sheep.find(s=>s.penned===ev.pen),['hooray!','all in!','we did it','home!'],1,t);}
+  else if(ev.type==='howl'){howl();const w=world.wolf;sayIf(world.sheep.filter(s=>!s.penned).sort((a,b)=>Math.hypot(a.x-w.x,a.y-w.y)-Math.hypot(b.x-w.x,b.y-w.y))[0],['WOLF!!','I knew it','told you'],1,t);}
+  else if(ev.type==='wolfFlee'){yelp();}
+  else if(ev.type==='thunder'){flashAt=t;rumble();sayIf(world.sheep.find(s=>!s.penned&&inView(s.x,s.y,viewRect(0))),['EEK','mum!!','not the sky!'],1,t);}
+  else if(ev.type==='bleat'){bleat(ev.kind,inView(ev.sheep.x,ev.sheep.y,viewRect(0))?.7:.25);sayIf(ev.sheep,LINES.scared,.15,t);} // far off: quieter
 }
 const SLOWMO=.35,CLOSING=1.1; // after the last sheep: sim speed, and real seconds before the results
 function frame(now){
@@ -1326,19 +2105,19 @@ function frame(now){
       world.events.length=0;
       if(mode!=='play')continue;
       recordRun();
-      if(world.penned===world.sheep.length){mode='closing';endTime=world.t;closingUntil=t+CLOSING;pointerHeld=false;}
+      if(world.penned===world.sheep.length){mode='closing';endTime=world.t;closingUntil=t+CLOSING;pointerHeld=false;celebrate(t);}
       else if(world.t>=timeLimit())finish(false);
     }
     kickDust(t);
     if(mode==='closing'&&t>=closingUntil)finish(true);
   }
   if(mode==='ready'||mode==='play')idleBleat(t);
-  if(mode!=='paused')followCamera(dt);
+  if(mode!=='paused'){followCamera(dt);animate(dt,t);updateLife(dt,t);chatter(t);}
   render(now);
   const cooldown=Math.ceil(world.dogs[selected].barkCooldown);
   if(shown.cooldown!==cooldown){shown.cooldown=cooldown;$('#barkCd').textContent=cooldown>0?cooldown+'s':'';$('#bBark').disabled=cooldown>0;}
   showText('sTime',(clockRunning()?world.t:endTime).toFixed(1)+'s');
-  showText('sSheep',`${world.penned}/${world.sheep.length}`);
+  if(showText('sSheep',`${world.penned}/${world.sheep.length}`)&&world.penned){const el=$('#sSheep');el.classList.remove('bump');void el.offsetWidth;el.classList.add('bump');}
   $('#sTime').style.color=timeLimit()-world.t<10&&mode==='play'?'var(--bad)':'';
   requestAnimationFrame(frame);
 }
