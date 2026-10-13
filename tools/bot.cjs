@@ -172,11 +172,11 @@ function play(level,{sprintFrom,behind,useBark}){
 // a few playing styles, from careful (walk near sheep, stay well back) to bold (sprint right behind them),
 // each with and without barking at strayed lambs
 const STYLES=[];for(const sprintFrom of [0,60,110,160])for(const behind of [25,45,70])for(const useBark of [false,true])STYLES.push({sprintFrom,behind,useBark});
-// flocks of 80 or more are slow to simulate: try only the careful styles, which do best on big flocks
+// flocks of 100 or more are slow to simulate: try only the careful styles, which do best on big flocks
 const BIG_STYLES=STYLES.filter(s=>s.sprintFrom<=60&&s.behind<=45);
 function stylesFor(level){
   const lambs=level.sheep.some(s=>s[2]===LAMB); // barking only matters with lambs about
-  return (level.sheep.length>=80?BIG_STYLES:STYLES).filter(s=>lambs||!s.useBark);
+  return (level.sheep.length>=100?BIG_STYLES:STYLES).filter(s=>lambs||!s.useBark);
 }
 // the better of two results: a finish beats no finish, then the faster, then more sheep penned
 const better=(a,b)=>!a?b:(b.time??1e9)<(a.time??1e9)||(!a.time&&!b.time&&b.penned>a.penned)?b:a;

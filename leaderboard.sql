@@ -3,7 +3,7 @@
 
 create table if not exists scores (
   id      bigint generated always as identity primary key,
-  level   int  not null check (level between 0 and 56),
+  level   int  not null check (level between 0 and 59),
   name    text not null check (char_length(name) between 1 and 16),
   time    real not null check (time > 0 and time < 3600),
   ghost   jsonb check (ghost is null or octet_length(ghost::text) < 300000), -- the dogs' paths, 10 samples a second
@@ -11,7 +11,7 @@ create table if not exists scores (
 );
 alter table scores add column if not exists ghost jsonb;
 -- widen the checks on a project made before the Open hill levels (more levels, longer runs, longer ghosts)
-alter table scores drop constraint if exists scores_level_check, add constraint scores_level_check check (level between 0 and 56);
+alter table scores drop constraint if exists scores_level_check, add constraint scores_level_check check (level between 0 and 59);
 alter table scores drop constraint if exists scores_time_check, add constraint scores_time_check check (time > 0 and time < 3600);
 alter table scores drop constraint if exists scores_ghost_check, add constraint scores_ghost_check check (ghost is null or octet_length(ghost::text) < 300000);
 
@@ -23,7 +23,7 @@ alter table scores enable row level security;
 -- Re-run this file after adding or changing levels.
 drop policy if exists "anyone adds a plausible time" on scores;
 create policy "anyone adds a plausible time" on scores for insert to anon
-  with check (time >= (array[3,5,14,5.5,19.5,20,13.5,74.5,98.5,16.5,4.5,35,12,70.5,81,13,57.5,93,17,5.5,14,56.5,64,184,95.5,703,118,105.5,173,136.5,164,22.5,39.5,81.5,151.5,255,36,77.5,41.5,39.5,179,87.5,198.5,83,156.5,0,0,0,131,176.5,169.5,70,0,114,34,591,0])[level + 1]);
+  with check (time >= (array[3,5,13.5,13,19.5,20,13.5,73.5,30,16.5,4.5,33,12,73,79.5,13,46,60.5,17,5.5,14,49.5,68.5,118,56.5,128,96,65.5,110.5,104.5,147.5,22.5,38.5,81,66.5,180,30,82,55.5,39.5,126,73,173,108.5,102,78.5,334,991,155,196.5,208.5,61.5,55.5,108,15.5,369.5,92,34,62.5,79])[level + 1]);
 
 -- The board shows each name once, with its best time and that run's ghost.
 drop view if exists best;
