@@ -1,6 +1,6 @@
 # Need for Sheep
 
-Need for Sheep: herd the flock into the pen with your sheepdog, and sort ewes from lambs. 60 levels over eleven farms, from a single sheep in a walled paddock to a hundred and fifty driven the length of a valley, through night, fog, snow and storm, with a wolf about, and a full sheepdog trial to finish. One HTML file plus five sound clips in [`audio/`](audio), no build step: open [`index.html`](index.html).
+Need for Sheep: herd the flock into the pen with your sheepdog, and sort ewes from lambs. 63 levels over twelve farms, from a single sheep in a walled paddock to a hundred and fifty driven the length of a valley, through night, fog, snow and storm, with a wolf about, and a full sheepdog trial to finish. One HTML file plus five sound clips in [`audio/`](audio), no build step: open [`index.html`](index.html).
 
 Fields are zoomed out until they fit the screen. A field too big for that is seen through a camera that follows your dog, with a map in whichever corner of the screen is clear of the pens, the flock and the dogs: tap the map to send the dog there on its own, the way a shepherd sends a dog on its outrun. A sent dog keeps going while you switch to the other one.
 
@@ -10,7 +10,7 @@ Two levels carry a three-step tutorial: the first level teaches herding, Shepher
 
 Sheep squash together but never through each other: each has a solid core half the size of its wool. They keep together, too: on an open field one that loses sight of the flock walks back to the nearest flockmate, and penned sheep amble to the back of the pen so the gateway stays clear for the rest. A pen is either flush against a wall or edge, or has plenty of room round it, so no sheep wedges itself behind one.
 
-**All weathers** changes what you see: at night only your dog's light and the pen lanterns show the field (and sheep eyes shining in the dark), fog closes in round the dog, snow fills with tracks, and in a storm every clap of thunder spooks the flock. In **Wolf country** a wolf slips out of the woods now and then and scatters the flock: run your dog at it, or bark near it, and it bolts back to its den.
+**All weathers** changes what you see: at night only your dog's light and the pen lanterns show the field (and sheep eyes shining in the dark), fog closes in round the dog, snow fills with tracks, and in a storm every clap of thunder spooks the flock. In **Wolf country** a wolf slips out of the woods now and then and scatters the flock: run your dog at it, or bark near it, and it bolts back to its den. On **The ram** farm a stubborn ram will not be rushed: sprint at him and he digs in, walk up close and he moves, and the ewes follow wherever he goes.
 
 **Trial day** is a real sheepdog trial: pairs of hurdles (fetch, drive and cross-drive gates) that three quarters of the flock must pass between, each with a counter, and the pen stays padlocked until the course is done.
 
