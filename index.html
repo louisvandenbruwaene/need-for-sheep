@@ -154,6 +154,9 @@ const BARK_RADIUS=170,BARK_COOLDOWN=4;
 const EWE=0,LAMB=1;
 const SHEEP_EDGE=14;          // sheep keep this far off the field edge
 const LAMB_BOOST=1.15;        // lambs are skittish: they notice dogs from further away and run faster
+// The ram is stubborn: he only gives way to a dog walking up close, and a sprinting dog makes him dig in.
+// The ewes take their lead from him, so where he goes the flock follows.
+const RAM_RANGE=.8,RAM_LEAD=8; // his range as a share of RMIN; how many ewes he counts as when the flock regroups
 const GATE_WIDTH=110;          // a pen may set its own gateWidth
 const REJOIN=320;              // a sheep with no flockmate in sight walks back to the nearest one this close
 const HIDE_SEEK=200,HIDE_SPEED=100; // after a bark, lambs look for ewes this close and trot (not sprint) behind them
@@ -189,8 +192,9 @@ function rng(seed){
 }
 
 /* ---------- level data ---------- */
-// A sheep is [x,y] for a ewe or [x,y,1] for a lamb.
+// A sheep is [x,y] for a ewe, [x,y,1] for a lamb, or [x,y,0,1] for the ram.
 const lambs=list=>list.map(([x,y])=>[x,y,LAMB]);
+const ram=(x,y)=>[x,y,EWE,1];
 // count sheep scattered in a disc of radius `spread` around (cx,cy)
 function cluster(cx,cy,count,spread,seed){
   const random=rng(seed),out=[];
@@ -304,6 +308,12 @@ const LEVELS=[
     course:[{a:[940,720],b:[1060,720]},{a:[450,820],b:[450,950]},{a:[1550,820],b:[1550,950]}],pen:{x:1760,y:1160,w:240,h:240,gate:'left',gateWidth:150},par:{time:218,gold:156},limit:310},
   {name:'The National',tip:'Sixty sheep, three gates, one pen. The whole trial.',field:[2600,1800],dogs:[[1300,1750]],sheep:cluster(1300,380,60,150,152),
     course:[{a:[1235,880],b:[1365,880]},{a:[700,1150],b:[700,1285]},{a:[1900,1150],b:[1900,1285]}],rocks:[[600,600,55],[2000,600,55]],pen:{x:2300,y:1500,w:300,h:300,gate:'left',gateWidth:160},par:{time:277,gold:198},limit:390},
+  {name:'The ram',tip:'The ram will not be rushed. Walk up close behind him, and the ewes follow where he goes.',field:[1000,620],dogs:[[60,310]],sheep:[ram(300,310),...cluster(300,310,10,55,160)],
+    pen:{x:860,y:240,w:140,h:140,gate:'left'},par:{time:46,gold:33},limit:90},
+  {name:'Head of the flock',tip:'Sprint at the ram and he digs in. Walk him round the rocks.',field:[1300,780],dogs:[[60,700]],sheep:[ram(360,240),...cluster(360,240,25,85,161)],
+    rocks:[[700,390,60],[700,130,45]],pen:{x:1130,y:610,w:170,h:170,gate:'left'},par:{time:181,gold:129},limit:260},
+  {name:'Old Horace',tip:'Fifty ewes, one ram, one gap in the wall.',field:[1600,900],dogs:[[80,820]],sheep:[ram(400,300),...cluster(400,300,50,120,162)],
+    fences:[[900,0,900,370],[900,530,900,900]],pen:{x:1400,y:700,w:200,h:200,gate:'top'},par:{time:150,gold:107},limit:210},
 ];
 
 // Levels grouped into farms, in play order. The numbers index LEVELS, which keeps its order so that
@@ -320,6 +330,7 @@ const FARMS=[
   {name:'All weathers',levels:[50,51,52,53]},
   {name:'Wolf country',levels:[54,55,56]},
   {name:'Trial day',levels:[57,58,59]},
+  {name:'The ram',levels:[60,61,62]},
 ];
 const ORDER=FARMS.flatMap(farm=>farm.levels);
 
@@ -391,8 +402,8 @@ function makeWorld(level){
     driving:false,targetX:x,targetY:y,maxSpeed:DOG_MAX,gain:6, // set each frame by the controls
     moving:false,sprint:0,range:RMIN,barkCooldown:0,
   }));
-  const sheep=level.sheep.map(([x,y,kind])=>({
-    x,y,vx:0,vy:0,kind:kind||EWE,penned:false,wrongPen:null, // wrongPen: the pen of the other kind it stands in
+  const sheep=level.sheep.map(([x,y,kind,isRam])=>({
+    x,y,vx:0,vy:0,kind:kind||EWE,ram:!!isRam,penned:false,wrongPen:null, // wrongPen: the pen of the other kind it stands in
     heading:random()*6.283,wanderAngle:random()*6.283,
     fear:0,      // 0..1, how scared it is right now (also spreads to flockmates)
     panic:0,     // 0..1, raised by sprinting dogs; loosens the flock
@@ -514,13 +525,13 @@ function senseDogs(world,s,acc){
   const boost=s.kind===LAMB?LAMB_BOOST:1,hidden=inBush(world,s);
   let fleeX=0,fleeY=0,awayX=0,awayY=0,fear=0,panic=0;
   for(const dog of world.threats){ // the dogs, and a wolf while it is about
-    const ex=s.x-dog.x,ey=s.y-dog.y,dist=Math.hypot(ex,ey)||1,range=dog.range*boost;
+    const ex=s.x-dog.x,ey=s.y-dog.y,dist=Math.hypot(ex,ey)||1,range=s.ram?RMIN*RAM_RANGE:dog.range*boost;
     awayX+=ex/(dist*dist);awayY+=ey/(dist*dist); // which way is "away from the dogs", nearer dogs count more
     if(dist<45){const q=1-dist/45;acc.x+=ex/dist*2600*q*q;acc.y+=ey/dist*2600*q*q;}
     if(dist>=range)continue;
     const close=1-dist/range; // 0 at the edge of the range, 1 at the dog
     // flee speed: edge+walking ~20, close+walking ~90, edge+running ~90, close+running ~190
-    let speed=(15+85*close*Math.sqrt(close)+dog.sprint*(65+40*close))*boost;
+    let speed=s.ram?(15+85*close*Math.sqrt(close))*(1-.85*dog.sprint):(15+85*close*Math.sqrt(close)+dog.sprint*(65+40*close))*boost;
     if(s.huddleTime)speed*=.2;
     if(hidden&&dist>50)speed*=.3;
     if(s.hideTime)speed*=.3;
@@ -554,7 +565,7 @@ function nearbySheep(world,s){
 // Neighbours within sight: their centre, mean velocity and highest fear. Adds personal-space pushes into acc.
 function senseFlock(world,s,acc){
   const isLamb=s.kind===LAMB,sight=isLamb?60:90;
-  let count=0,cx=0,cy=0,vx=0,vy=0,maxFear=0;
+  let count=0,weight=0,cx=0,cy=0,vx=0,vy=0,maxFear=0;
   for(const o of nearbySheep(world,s)){
     if(o===s||o.penned!==s.penned)continue;
     const ex=s.x-o.x,ey=s.y-o.y;
@@ -564,9 +575,9 @@ function senseFlock(world,s,acc){
     const space=s.kind&&o.kind?13:18;
     if(dist<space){acc.x+=ex/dist*500*(1-dist/space);acc.y+=ey/dist*500*(1-dist/space);}
     const mate=s.huddleTime||s.hideTime?o.kind===s.kind:true; // after a bark ewes bunch with ewes and lambs stick with lambs
-    if(mate&&dist<sight){count++;cx+=o.x;cy+=o.y;vx+=o.vx;vy+=o.vy;maxFear=Math.max(maxFear,o.fear);}
+    if(mate&&dist<sight){const k=o.ram?RAM_LEAD:1;count++;weight+=k;cx+=o.x*k;cy+=o.y*k;vx+=o.vx*k;vy+=o.vy*k;maxFear=Math.max(maxFear,o.fear);}
   }
-  return count?{count,cx:cx/count,cy:cy/count,vx:vx/count,vy:vy/count,maxFear}:{count,maxFear};
+  return count?{count,cx:cx/weight,cy:cy/weight,vx:vx/weight,vy:vy/weight,maxFear}:{count,maxFear};
 }
 
 // A slight pull toward mid-field, stronger the nearer a corner. Fades out by the sheep's own pen gate
@@ -583,7 +594,7 @@ function centrePull(world,s){
 function flockVelocity(s,flock,dogs){
   const loose=1-.6*s.panic; // a running dog loosens the flock
   const gx=flock.cx-s.x,gy=flock.cy-s.y,gap=Math.hypot(gx,gy)||1;
-  const speed=Math.min(gap*2.2,s.huddleTime?60:(22+80*s.fear)*(s.kind===LAMB?.6:1))*loose;
+  const speed=Math.min(gap*2.2,s.huddleTime?60:(22+80*s.fear)*(s.kind===LAMB?.6:1))*loose*(s.ram?.35:1);
   const [hx,hy]=dropBackward(gx/gap*speed,gy/gap*speed,dogs.awayX,dogs.awayY);
   const align=.5*s.fear*loose;
   return [hx+flock.vx*align,hy+flock.vy*align];
@@ -1398,7 +1409,7 @@ function drawSheep(s,t){
   if(a.lying&&!still)return drawLying(s,a,t);
   const hop=still?0:s.hopTime>0?Math.sin(s.hopTime/.4*Math.PI)*5:0;
   const cheer=!still&&s.penned&&s.penned.shut?Math.max(0,Math.sin(t*6+s.wanderAngle*5))**10*7:0; // a full pen bounces
-  const lift=hop+cheer,k=artScale()*(lamb?.62:1);
+  const lift=hop+cheer,k=artScale()*(lamb?.62:s.ram?1.3:1);
   ctx.fillStyle='rgba(30,40,20,.22)';ctx.beginPath();ctx.ellipse(s.x+1,s.y+3*k,(11-lift*.3)*k,(8-lift*.2)*k,s.heading,0,7);ctx.fill();
   ctx.save();ctx.translate(s.x,s.y-lift);ctx.rotate(s.heading);ctx.scale(k,k);
   // legs peek out under the wool, swinging in diagonal pairs as it walks
@@ -1419,6 +1430,14 @@ function drawSheep(s,t){
   }
   ctx.fillStyle=lamb?'#6b5248':'#3a322e';
   ctx.beginPath();ctx.ellipse(hx,0,4.5-a.graze*.4,3.6-a.graze*.3,0,0,7);ctx.fill();
+  if(s.ram){ // curled horns, one each side of the head
+    ctx.strokeStyle='#5e4d33';ctx.lineCap='round';ctx.lineWidth=4.6;
+    const horn=sg=>{ctx.beginPath();ctx.moveTo(hx-1,2*sg);ctx.bezierCurveTo(hx-8,9*sg,hx-1,13.5*sg,hx+3.5,8*sg);ctx.stroke();};
+    for(const sg of [-1,1])horn(sg);
+    ctx.strokeStyle='#ead6a2';ctx.lineWidth=3;for(const sg of [-1,1])horn(sg);
+    ctx.strokeStyle='#8f7a55';ctx.lineWidth=.8;
+    for(const sg of [-1,1]){ctx.beginPath();ctx.moveTo(hx-4.6,6.6*sg);ctx.lineTo(hx-2.2,8*sg);ctx.moveTo(hx-2.4,10.4*sg);ctx.lineTo(hx-.4,9.6*sg);ctx.stroke();}
+  }
   ctx.beginPath();ctx.ellipse(hx-1.5-ears*.8,-4,1.6,2.8,ears,0,7);ctx.moveTo(hx-1.5-ears*.8+1.6,4);ctx.ellipse(hx-1.5-ears*.8,4,1.6,2.8,-ears,0,7);ctx.fill();
   if(a.graze<.6&&!(t>a.blinkAt&&t<a.blinkAt+.15)){ // eyes, unless blinking or looking down at the grass
     ctx.fillStyle=s.fear>.5?'#fff':'#e9e4d6';const r=s.fear>.5?1.25:.9;
@@ -1429,7 +1448,7 @@ function drawSheep(s,t){
 
 // Lying down for a rest: wool spread a little wider, head turned along the body, eyes shut, breathing slowly.
 function drawLying(s,a,t){
-  const k=artScale()*(s.kind===LAMB?.62:1),breathe=1+Math.sin(t*1.6+s.wanderAngle)*.04;
+  const k=artScale()*(s.kind===LAMB?.62:s.ram?1.3:1),breathe=1+Math.sin(t*1.6+s.wanderAngle)*.04;
   ctx.fillStyle='rgba(30,40,20,.2)';ctx.beginPath();ctx.ellipse(s.x+1,s.y+2*k,13*k,10*k,s.heading,0,7);ctx.fill();
   ctx.save();ctx.translate(s.x,s.y);ctx.rotate(s.heading);ctx.scale(k*1.08*breathe,k*1.12*breathe);
   const sprite=woolSprite(a.black?'black':s.kind===LAMB?'lamb':'ewe');
@@ -1638,8 +1657,8 @@ function dressLevel(){
   birds=Array.from({length:clamp(Math.round(W*H/160000),2,14)},()=>{const [x,y]=spot();return {x,y,z:0,vx:0,vy:0,state:'ground',peckAt:random()*3,face:random()*6.283,perch:null};});
   butterflies=Array.from({length:clamp(Math.round(W*H/200000),2,9)},()=>{const [x,y]=spot();return {x,y,hx:x,hy:y,seed:random()*100,colour:['#fff6c8','#f4d35e','#a8d8f0','#f7b2c6'][random()*4|0]};});
   prints=[];ripples=[];bubbles=[];confetti=[];
-  world.sheep.forEach((s,i)=>{anim(s).black=s.kind===EWE&&i%29===13;}); // one ewe in about thirty is a black sheep
-  const bell=world.sheep.find((s,i)=>s.kind===EWE&&!anim(s).black&&i>=world.sheep.length/3); // and one wears a bell
+  world.sheep.forEach((s,i)=>{anim(s).black=s.kind===EWE&&!s.ram&&i%29===13;}); // one ewe in about thirty is a black sheep
+  const bell=world.sheep.find((s,i)=>s.kind===EWE&&!s.ram&&!anim(s).black&&i>=world.sheep.length/3); // and one wears a bell
   if(bell)anim(bell).bell=true;
 }
 
@@ -1751,6 +1770,7 @@ const LINES={
   lost:['hello?','guys?','where is everyone?','baa?'],
   wrong:['oops','wrong pen?','is this mine?'],
   lamb:['mum!','wheee','boing','can we go?'],
+  ram:['no.','make me','hmph','I was here first','my field'],
 };
 function sayIf(s,lines,chance,t){
   if(!s||Math.random()>chance||bubbles.length>=3||bubbles.some(b=>Math.hypot(b.who.x-s.x,b.who.y-s.y)<70))return; // one voice per patch of field
@@ -1780,7 +1800,7 @@ function chatter(t){ // a calm sheep remarks on its day; on an open field a lost
   if(!free.length)return;
   const s=free[Math.random()*free.length|0];
   if(world.open&&!free.some(o=>o!==s&&Math.hypot(o.x-s.x,o.y-s.y)<150))return sayIf(s,LINES.lost,.9,t);
-  if(s.fear<.15)sayIf(s,s.kind===LAMB?LINES.lamb:LINES.idle,.6,t);
+  if(s.fear<.15)sayIf(s,s.ram?LINES.ram:s.kind===LAMB?LINES.lamb:LINES.idle,.6,t);
 }
 
 // The last sheep is in: confetti and wool fly out of every pen.
