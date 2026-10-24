@@ -1,5 +1,11 @@
 # Need for Sheep
 
+### ▶ [Play Need for Sheep in your browser](https://louisvandenbruwaene.github.io/need-for-sheep/)
+
+No install, no account: open the link and play. Drag from your dog to move it: close walks, far sprints. Level 1 walks you through it.
+
+[![Need for Sheep: a sheepdog and the pen on the first paddock](screenshot.png)](https://louisvandenbruwaene.github.io/need-for-sheep/)
+
 Need for Sheep: herd the flock into the pen with your sheepdog, and sort ewes from lambs. 63 levels over twelve farms, from a single sheep in a walled paddock to a hundred and fifty driven the length of a valley, through night, fog, snow and storm, with a wolf about, and a full sheepdog trial to finish. One HTML file plus five sound clips in [`audio/`](audio), no build step: open [`index.html`](index.html).
 
 Fields are zoomed out until they fit the screen. A field too big for that is seen through a camera that follows your dog, with a map in whichever corner of the screen is clear of the pens, the flock and the dogs: tap the map to send the dog there on its own, the way a shepherd sends a dog on its outrun. A sent dog keeps going while you switch to the other one.
