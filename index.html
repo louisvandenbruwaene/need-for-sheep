@@ -24,10 +24,12 @@ body{margin:0}
 }
 body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15px}
 .wrap{max-width:1000px;margin:0 auto;padding:18px 16px 40px;display:grid;gap:12px}
-.top{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px 16px}
-.title{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;min-width:0}
+/* The header keeps one shape on every level and farm: title row, then the farm and its levels, so the board never jumps. */
+.top{display:grid;gap:10px}
+.title{display:flex;align-items:baseline;gap:12px;min-width:0}
 h1{font-family:var(--f-display);font-weight:700;font-size:30px;margin:0;letter-spacing:-.01em}
-#lvname{font-family:var(--f-display);font-weight:500;font-size:18px;color:var(--muted)}
+#lvname{font-family:var(--f-display);font-weight:500;font-size:18px;color:var(--muted);min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+h1,#starTotal{white-space:nowrap}
 .levels{display:flex;gap:8px 12px;flex-wrap:wrap;align-items:center}
 .farmnav{display:flex;align-items:center;gap:6px}
 .farmnav button{width:34px;padding:8px 0}
@@ -50,13 +52,19 @@ button:active{transform:translateY(2px);box-shadow:0 1px 0 #151a13}
 button:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
 button.primary{background:var(--accent);color:#2a2410;min-width:96px}
 button.off{opacity:.45}
+/* Instant hover help on the bar's buttons (a title tooltip takes a second to appear). */
+[data-tip]{position:relative}
+[data-tip]:hover::after{content:attr(data-tip);position:absolute;bottom:calc(100% + 8px);right:0;white-space:nowrap;pointer-events:none;
+  font:600 13px var(--f-body);color:var(--ink);background:var(--panel);border:1px solid var(--line);padding:5px 9px;border-radius:8px;box-shadow:0 3px 8px rgba(0,0,0,.35);z-index:5}
+@media (hover:none){[data-tip]:hover::after{display:none}}
 button.whistle{width:44px;padding:9px 0;touch-action:none}
+#bBark{min-width:94px} /* room for the cooldown, so the bar never shifts */
 button.whistle.on{background:var(--accent);color:#2a2410}
 .dog{display:flex;align-items:center;gap:7px}
 .dog i{width:12px;height:12px;border-radius:50%;display:block;box-shadow:0 0 0 2px #151a13}
 .dog.sel{box-shadow:0 0 0 3px var(--c) inset,0 3px 0 #151a13}
 .stats{display:flex;gap:20px;font-family:var(--f-display);font-variant-numeric:tabular-nums}
-.stat{display:grid;line-height:1.1}
+.stat{display:grid;line-height:1.1;min-width:84px} /* room for 4-digit times and 150/150 */
 .stat b{font-size:22px;font-weight:600}
 .stat span{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em}
 .overlay{position:absolute;inset:0;display:grid;place-items:safe center;overflow:auto;background:rgba(18,23,16,.6);padding:16px}
@@ -87,7 +95,7 @@ button.whistle.on{background:var(--accent);color:#2a2410}
 .board .note{margin:0;font-size:13px;color:var(--muted)}
 @keyframes pop{0%{transform:scale(0) rotate(-40deg)}100%{transform:scale(1)}}
 @media (prefers-reduced-motion:reduce){.stars span.on{animation:none}}
-@media (max-width:560px){h1{font-size:24px}.stat b{font-size:18px}button{font-size:14px;padding:8px 11px}}
+@media (max-width:560px){h1{font-size:24px}.stat b{font-size:18px}.stat{min-width:70px}button{font-size:14px;padding:8px 11px}.lv{width:38px}#bBark{min-width:80px}}
 </style>
 </head>
 <body>
@@ -123,12 +131,12 @@ button.whistle.on{background:var(--accent);color:#2a2410}
       <div class="stat"><b id="sSheep">0/1</b><span id="sSheepLabel">penned</span></div>
     </div>
     <div class="group">
-      <button id="bGhost" title="G: show or hide the ghost">Ghost</button>
-      <button id="bSound" title="M: sound on or off" aria-label="Sound">🔊</button>
-      <button class="whistle" id="bComeBye" title="Q (hold): come bye, circle the flock clockwise" aria-label="Come bye">↻</button>
-      <button class="whistle" id="bAway" title="E (hold): away to me, circle the flock anticlockwise" aria-label="Away to me">↺</button>
-      <button id="bBark" title="Space">Bark <small id="barkCd"></small></button>
-      <button class="primary" id="bRestart">Restart</button>
+      <button id="bGhost" data-tip="Show or hide the ghost (G)">Ghost</button>
+      <button id="bSound" data-tip="Sound on or off (M)" aria-label="Sound">🔊</button>
+      <button class="whistle" id="bComeBye" data-tip="Hold: circle the flock clockwise (Q)" aria-label="Come bye">↻</button>
+      <button class="whistle" id="bAway" data-tip="Hold: circle the flock anticlockwise (E)" aria-label="Away to me">↺</button>
+      <button id="bBark" data-tip="Bark: lambs run behind the ewes (Space)">Bark <small id="barkCd"></small></button>
+      <button class="primary" id="bRestart" data-tip="Start the level again (R)">Restart</button>
     </div>
   </div>
 </div>
@@ -881,6 +889,12 @@ if(typeof module!=='undefined')module.exports={LEVELS,FARMS,ORDER,makeWorld,step
 
 <script>
 /* ---------- game UI ---------- */
+// UI settings: how the controls feel and how long hints stay up (the simulation's own numbers are in the sim script)
+const POINTER_WALK_ZONE=RMIN;  // drag inside the dog's dashed ring (field px) and it walks; further out it sprints
+const POINTER_SPRINT_RAMP=50;  // past the ring the dog speeds up from a walk to a full sprint over this many field px
+const POINTER_GAIN=6;          // how sharply the dog closes on the pointer (speed per px of distance, before the cap)
+const TIP_LINGER=5,TIP_FADE=1; // a level's tip stays this many seconds into the run, then fades out over TIP_FADE
+const LABEL_MAX_WIDTH=400;     // on-field text wraps at this width (screen px), clear of a minimap in a top corner
 const DOG_COLOURS=['#efbd4c','#71bdf0','#f0806f'];
 const SPRINT_COLOUR='#ef7b6b';
 const FONT='Fredoka, system-ui, sans-serif';
@@ -1030,7 +1044,7 @@ const validGhost=dogs=>Array.isArray(dogs)&&dogs.length===level.dogs.length
   &&dogs.every(d=>Array.isArray(d)&&d.length>=2&&d.length%2===0&&d.every(Number.isFinite));
 function setGhost(name,time,dogs){
   ghost=validGhost(dogs)?{name,time,dogs,headings:dogs.map(()=>0)}:null;
-  $('#bGhost').hidden=!ghost;
+  $('#bGhost').style.visibility=ghost?'':'hidden'; // keeps its slot, so the bar does not shift
 }
 function saveMyGhost(time){
   const best=myGhosts[levelIndex];
@@ -1060,7 +1074,7 @@ function buildLevels(){
     const b=document.createElement('button'),got=stars[i]||0;
     b.className='lv'+(i==levelIndex?' cur':'');
     b.innerHTML=`<b>${first+k+1}</b><small>${'★'.repeat(got)}${'·'.repeat(3-got)}</small>`;
-    b.title=LEVELS[i].name;b.onclick=()=>load(i);
+    b.dataset.tip=LEVELS[i].name;b.setAttribute('aria-label',`Level ${first+k+1}: ${LEVELS[i].name}`);b.onclick=()=>load(i);
     row.appendChild(b);
   });
   el.append(nav,row);
@@ -1321,7 +1335,12 @@ $('#bGhost').onclick=toggleGhost;
 $('#ovRetry').onclick=reset;
 $('#ovNext').onclick=()=>load(nextLevel());
 
-// Pointer: the dog walks when you lead it closely and sprints when the pointer is far ahead.
+// Pointer: the dog walks while the pointer is inside its dashed ring and sprints when the pointer is further out.
+// The ring is measured in the field, so it is the same circle the player sees at any zoom, wider than a fingertip.
+function pointerSpeed(dog){
+  const beyond=Math.hypot(pointer[0]-dog.x,pointer[1]-dog.y)-POINTER_WALK_ZONE;
+  return beyond<=0?DOG_WALK:DOG_WALK+(DOG_MAX-DOG_WALK)*Math.min(1,beyond/POINTER_SPRINT_RAMP);
+}
 // Keys: walk, Shift sprints. Only the selected dog takes these; the others stand still as blockers,
 // unless the map sent one somewhere: it runs there on its own, until it arrives or you steer it.
 function steerDogs(){
@@ -1337,7 +1356,7 @@ function steerDogs(){
     const steered=i===selected&&(pointerHeld&&pointer||x||y||flank);
     if(steered)dog.send=null;
     if(i===selected&&pointerHeld&&pointer){
-      Object.assign(dog,{driving:true,targetX:pointer[0],targetY:pointer[1],maxSpeed:DOG_MAX,gain:2.6});
+      Object.assign(dog,{driving:true,targetX:pointer[0],targetY:pointer[1],maxSpeed:pointerSpeed(dog),gain:POINTER_GAIN});
     }else if(flank&&!x&&!y){
       const to=flankTarget(dog,Math.sign(flank));
       if(to)Object.assign(dog,{driving:true,targetX:to[0],targetY:to[1],maxSpeed:DOG_MAX,gain:6});
@@ -1355,10 +1374,21 @@ function steerDogs(){
 /* ---------- drawing ---------- */
 const SHADOW='rgba(30,40,20,.25)';
 function circle(x,y,r){ctx.beginPath();ctx.arc(x,y,r,0,7);ctx.fill();}
+// White text with a soft dark outline, centred on (x,y). Text wider than LABEL_MAX_WIDTH wraps onto more lines,
+// the block still centred on (x,y).
 function label(text,x,y,size=20){
   ctx.font=`600 ${size}px ${FONT}`;ctx.textAlign='center';ctx.textBaseline='middle';
-  ctx.lineWidth=5;ctx.strokeStyle='rgba(30,40,20,.55)';ctx.strokeText(text,x,y);
-  ctx.fillStyle='#fff';ctx.fillText(text,x,y);
+  const lines=[''];
+  for(const word of text.split(' ')){
+    const line=lines[lines.length-1],longer=line?line+' '+word:word;
+    if(line&&ctx.measureText(longer).width>LABEL_MAX_WIDTH)lines.push(word);else lines[lines.length-1]=longer;
+  }
+  const lineHeight=size*1.25;
+  lines.forEach((line,k)=>{
+    const lineY=y+(k-(lines.length-1)/2)*lineHeight;
+    ctx.lineWidth=5;ctx.strokeStyle='rgba(30,40,20,.55)';ctx.strokeText(line,x,lineY);
+    ctx.fillStyle='#fff';ctx.fillText(line,x,lineY);
+  });
 }
 function drawFence(x1,y1,x2,y2,wood='#8a5a32'){
   ctx.lineCap='round';
@@ -1950,7 +1980,8 @@ function drawPointerLine(){
   world.dogs.forEach((dog,i)=>{
     const to=i===selected&&pointerHeld&&pointer?pointer:dog.send;
     if(!to)return;
-    ctx.strokeStyle=DOG_COLOURS[i];ctx.globalAlpha=.6;ctx.lineWidth=2;ctx.setLineDash([6,6]);
+    const sprinting=to===pointer&&pointerSpeed(dog)>DOG_WALK; // the pointer is outside the walk ring
+    ctx.strokeStyle=sprinting?SPRINT_COLOUR:DOG_COLOURS[i];ctx.globalAlpha=.6;ctx.lineWidth=2;ctx.setLineDash([6,6]);
     ctx.beginPath();ctx.moveTo(dog.x,dog.y);ctx.lineTo(...to);ctx.stroke();
     ctx.setLineDash([]);ctx.globalAlpha=1;
     ctx.lineWidth=3;ctx.beginPath();ctx.arc(to[0],to[1],9,0,7);ctx.stroke();
@@ -2092,7 +2123,7 @@ const centreOf=kind=>{const free=world.sheep.filter(s=>s.kind===kind&&!s.penned)
 const SPLIT_GAP={x:460,y:250}; // the gap between Shepherd's test's two fences
 const TUTORIALS={
   'First sheep':[
-    {text:'1/3  Drag from your dog to move it. Close walks, far sprints.',
+    {text:'1/3  Drag from your dog. Inside its ring it walks, outside it sprints.',
       target:()=>world.dogs[0],done:()=>Math.hypot(world.dogs[0].x-level.dogs[0][0],world.dogs[0].y-level.dogs[0][1])>40},
     {text:'2/3  Sheep run from your dog. Walk up behind it.',
       target:()=>{const s=world.sheep[0],g=gateMiddle(world.pens[0]),gx=g.x-s.x,gy=g.y-s.y,d=Math.hypot(gx,gy)||1;
@@ -2156,7 +2187,7 @@ function drawHint(step){
     ctx.fillStyle='rgba(18,23,16,.68)';ctx.fillRect(0,0,FIELD_W,FIELD_H);
     label('Paused',FIELD_W/2,96,40);label('P, Esc or tap to go on',FIELD_W/2,134,18);
     // the controls, two columns
-    const rows=[['Drag','run the dog: close walks, far sprints'],['WASD / arrows','walk, Shift sprints'],['Space','bark'],
+    const rows=[['Drag','run the dog: inside its ring walks, outside sprints'],['WASD / arrows','walk, Shift sprints'],['Space','bark'],
       ['Q  /  E','circle the flock: come bye / away'],['Tab, 1-3','switch dog'],['Map','tap to send the dog there'],['R  ·  M  ·  G','restart · sound · ghost']];
     ctx.font=`600 15px ${FONT}`;ctx.textBaseline='middle';
     rows.forEach(([key,what],i)=>{
@@ -2166,13 +2197,17 @@ function drawHint(step){
     });
     return;
   }
-  if(step)return label(step.text,FIELD_W/2,34);
-  if(mode!=='ready')return;
+  if(step)return label(step.text,FIELD_W/2,38);
+  // the level's tip: up before the start, and for the first TIP_LINGER seconds of the run, then fading out
+  const fade=mode==='ready'?1:mode==='play'?clamp((TIP_LINGER+TIP_FADE-world.t)/TIP_FADE,0,1):0;
+  if(!fade)return;
   const text=level.tip?level.tip
-    :level.dogs.length>1?'Drag close to walk, far to sprint. Tab, right-click or tap a dog to switch.'
-    :'Drag close to the dog to walk, far ahead to sprint';
-  const penAtTop=world.pens.some(P=>(P.y-cam.y)*zoom<60&&(P.x-cam.x)*zoom<520&&(P.x+P.w-cam.x)*zoom>280); // then show the hint at the bottom
-  label(text,FIELD_W/2,penAtTop?FIELD_H-30:34);
+    :level.dogs.length>1?'Drag inside the ring to walk, outside to sprint. Tab, right-click or tap a dog to switch.'
+    :'Drag inside the dashed ring to walk, outside it to sprint';
+  const penAtTop=world.pens.some(P=>(P.y-cam.y)*zoom<70&&(P.x-cam.x)*zoom<620&&(P.x+P.w-cam.x)*zoom>180); // then show the hint at the bottom
+  ctx.globalAlpha=fade;
+  label(text,FIELD_W/2,penAtTop?FIELD_H-44:44);
+  ctx.globalAlpha=1;
 }
 function render(now){
   const t=now/1000,step=lesson();
