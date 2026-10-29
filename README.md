@@ -2,7 +2,7 @@
 
 ### ▶ [Play Need for Sheep in your browser](https://louisvandenbruwaene.github.io/need-for-sheep/)
 
-No install, no account: open the link and play. Drag from your dog to move it: close walks, far sprints. Level 1 walks you through it.
+No install, no account: open the link and play. Drag from your dog to move it: inside its dashed ring it walks, outside it sprints. Level 1 walks you through it.
 
 [![Need for Sheep: a sheepdog and the pen on the first paddock](screenshot.png)](https://louisvandenbruwaene.github.io/need-for-sheep/)
 
@@ -12,7 +12,7 @@ Fields are zoomed out until they fit the screen. A field too big for that is see
 
 Most levels give you one dog. A second dog appears only where you need it to block off somewhere the flock would get stuck (a side yard, an old quarry, a gateway to nowhere); a pulsing ring shows where to park it.
 
-Two levels carry a three-step tutorial: the first level teaches herding, Shepherd's test teaches splitting a flock with a bark. Each prompt points at where to go and moves on once you have done it.
+Each level's tip stays up for the first seconds of the run. Two levels carry a three-step tutorial: the first level teaches herding, Shepherd's test teaches splitting a flock with a bark. Each prompt points at where to go and moves on once you have done it.
 
 Sheep squash together but never through each other: each has a solid core half the size of its wool. They keep together, too: on an open field one that loses sight of the flock walks back to the nearest flockmate, and penned sheep amble to the back of the pen so the gateway stays clear for the rest. A pen is either flush against a wall or edge, or has plenty of room round it, so no sheep wedges itself behind one.
 
@@ -22,7 +22,7 @@ Sheep squash together but never through each other: each has a solid core half t
 
 The field is alive: sheep graze, blink, chatter in speech bubbles and now and then faint when barked at; crows peck about, scatter when the dog comes and sometimes ride on a sheep's back; cloud shadows drift over; mud takes footprints. Each farm has its own light. A full pen bounces, the last sheep in sets off confetti, and the results card adds up how far your dog ran.
 
-Controls: drag to run the dog (close to walk, far to sprint) or arrow keys / WASD with Shift to sprint. Space barks. Hold Q (come bye) or E (away to me) and the dog circles the nearest bunch of sheep clockwise or anticlockwise, the way a shepherd whistles a dog round its flock; the ↻ and ↺ buttons do the same on touch. Tab or right-click switches dog, 1-3 picks one. P or Esc pauses (so does leaving the window), R restarts, M mutes, G hides the ghost, Enter goes on from the results.
+Controls: drag to run the dog (inside its dashed ring to walk, outside to sprint) or arrow keys / WASD with Shift to sprint. Space barks. Hold Q (come bye) or E (away to me) and the dog circles the nearest bunch of sheep clockwise or anticlockwise, the way a shepherd whistles a dog round its flock; the ↻ and ↺ buttons do the same on touch. Tab or right-click switches dog, 1-3 picks one. P or Esc pauses (so does leaving the window), R restarts, M mutes, G hides the ghost, Enter goes on from the results.
 
 Sorting pens are labelled EWES or LAMBS. They take any sheep but only count their own kind, and a sheep in the wrong pen stays free to be driven out. A gate swings shut once its pen holds every sheep it needs. Your best run on each level comes back as a ghost dog to race.
 
